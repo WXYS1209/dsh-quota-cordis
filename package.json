@@ -1,5 +1,5 @@
 {
-  "name": "dsh-provider-quota",
+  "name": "dsh-quota-cordis",
   "version": "0.6.0",
   "description": "Provider balances, subscription quotas and OpenAI API spend for DeepSeek Harness",
   "license": "MIT",

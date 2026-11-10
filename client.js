@@ -1,9 +1,9 @@
 window.__ModuleLoader__.load({
-  id: 'dsh-provider-quota',
+  id: 'dsh-quota-cordis',
   factory(require) {
     const React = require('react');
     const h = React.createElement;
-    const NS = 'dsh-provider-quota';
+    const NS = 'dsh-quota-cordis';
     const POPUP_ID = 'pq-provider-popup';
 
     // BEGIN PURE LAYOUT

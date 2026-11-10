@@ -6,10 +6,10 @@ Provider balances, subscription quotas and OpenAI API spend for [DeepSeek Harnes
 
 ```sh
 # from npm (after first publish)
-dsh plugin --profile desktop add dsh-provider-quota
+dsh plugin --profile desktop add dsh-quota-cordis
 
 # from a local checkout
-dsh plugin --profile desktop add /path/to/dsh-provider-quota
+dsh plugin --profile desktop add /path/to/checkout
 ```
 
 Requires DSH `0.2.2-rc.1` (declared via `engines.dsh`; no version exemptions).
