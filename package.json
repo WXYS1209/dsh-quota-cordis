@@ -3,6 +3,9 @@
   "version": "0.6.0",
   "description": "Provider balances, subscription quotas and OpenAI API spend for DeepSeek Harness",
   "license": "MIT",
+  "repository": { "type": "git", "url": "git+https://github.com/WXYS1209/dsh-quota-cordis.git" },
+  "homepage": "https://github.com/WXYS1209/dsh-quota-cordis#readme",
+  "bugs": { "url": "https://github.com/WXYS1209/dsh-quota-cordis/issues" },
   "type": "module",
   "keywords": ["deepseek-harness", "dsh", "dsh-plugin", "quota", "usage", "openai", "deepseek", "glm"],
   "exports": {
@@ -11,7 +14,7 @@
     "./locale/*.json": "./locale/*.json",
     "./icon": "./icon.svg"
   },
-  "files": ["index.js", "manager.js", "adapters.js", "openai-admin.js", "openai-costs.js", "codex-usage.js", "quota-settings.js", "client.js", "cordis.patch.yml", "locale/*.json", "icon.svg", "README.md", "LICENSE"],
+  "files": ["index.js", "manager.js", "adapters.js", "openai-admin.js", "openai-costs.js", "codex-usage.js", "quota-settings.js", "client.js", "cordis.patch.yml", "locale/*.json", "icon.svg", "README.md", "CHANGELOG.md", "SECURITY.md", "LICENSE"],
   "scripts": {"test": "node --test", "check": "node --check index.js && node --check manager.js && node --check adapters.js && node --check openai-admin.js && node --check openai-costs.js && node --check codex-usage.js && node --check quota-settings.js && node --check client.js"},
   "engines": {"dsh": "0.2.2-rc.1"},
   "publishConfig": {"access": "public"},

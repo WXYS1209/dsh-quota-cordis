@@ -1,6 +1,6 @@
 # Provider quota / 供应商额度
 
-Provider balances, subscription quotas and OpenAI API spend for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) Desktop (verified on DSH `0.2.2-rc.1`). Native Host/Client plugin, no npm runtime dependencies or install scripts.
+Provider balances, subscription quotas and OpenAI API spend for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) Desktop. Source, releases and issue tracker: [WXYS1209/dsh-quota-cordis](https://github.com/WXYS1209/dsh-quota-cordis). Version 0.6.0 was verified on DSH `0.2.2-rc.1`. Native Host/Client plugin, no npm runtime dependencies or install scripts.
 
 ## Install
 

@@ -1,0 +1,16 @@
+# Security policy
+
+## Reporting a vulnerability
+
+Please report security issues privately through GitHub's **Report a vulnerability** flow for [WXYS1209/dsh-quota-cordis](https://github.com/WXYS1209/dsh-quota-cordis/security/advisories/new), if enabled. If private reporting is unavailable, open an issue asking for a private contact; do not include credentials or tokens in a public issue.
+
+## Credential handling
+
+- Provider credentials are resolved and used by the local DSH Host; normalized quota results do not contain them.
+- The optional OpenAI Admin Key is saved through the Harness credential service and sent only to the fixed official OpenAI Costs endpoint over HTTPS.
+- The Codex quota adapter reads only the existing native `openai-codex` access grant; it does not read refresh tokens, CLI files or browser cookies, and does not perform inference or mutate the grant.
+- Do not paste API keys, Admin keys, OAuth links/codes or callback URLs into issues, chat transcripts, logs or screenshots.
+
+## Supported version
+
+The 0.6.0 release declares DSH `0.2.2-rc.1` compatibility. Please include the DSH and plugin versions in a report, but never attach credentials or raw authorization data.
