@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Provider quota",
+    "description": "Balances, GLM/Codex quotas and API spend for configured providers. Credentials stay on the Host."
+  }
+}
