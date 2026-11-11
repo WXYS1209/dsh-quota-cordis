@@ -17,6 +17,13 @@ First public-ready release.
 - UTC month-start zero-length range returns a known empty result without a request; stream read failures report `network`, malformed payloads report `invalid-response`.
 - Agent tools `provider_quota`, `quota_color_settings`; all normalized results are credential-free.
 
+Verification notes for 0.6.0 (2026-11-10, Desktop `0.2.2-rc.1`):
+
+- Live queries verified: DeepSeek API-key and in-app account balances, GLM Coding Plan (China) credit windows, OpenAI organization month-to-date spend with per-API-key breakdown, and built-in `openai-codex` subscription windows.
+- Provider discovery is generic; only the providers above are verified end to end. Global Z.AI is implemented but unverified with a real account.
+- The quota page (Overview / Color settings / API extras tabs), composer summary and upward popup were registered and functional in Desktop; visual polish was reviewed manually on the live page.
+- Unauthenticated requests to the plugin's HTTP endpoints return 401/403.
+
 ## 0.5.x and earlier
 
 Local development iterations (2026-11-05 → 2026-11-10): initial Host/Client plugin, GLM/DeepSeek/OpenAI adapters, native Codex usage, editable thresholds, popup UX, streaming-GET bridge fix, account grant isolation.
