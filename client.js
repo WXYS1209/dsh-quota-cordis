@@ -77,12 +77,12 @@ window.__ModuleLoader__.load({
       zh: {
         title: '供应商额度', subtitle: '余额、订阅额度与 API 支出，分开查看。', refresh: '刷新全部', refreshOne: '刷新', loading: '正在查询…', empty: '尚未发现已配置的供应商。请先在「模型」设置中添加供应商。',
         api: 'API 余额与支出', subscription: '订阅额度', account: 'App 登录账户', current: '当前供应商额度', details: '额度详情', close: '关闭额度详情',
-        balance: '可用余额', recharge: '充值余额', bonus: '赠送余额', rolling: '五小时', weekly: '周限', mcp: 'MCP 工具', quota: '额度窗口',
+        balance: '可用余额', recharge: '充值余额', bonus: '赠送余额', rolling: '五小时', weekly: '周限', monthly: '月度', mcp: 'MCP 工具', quota: '额度窗口',
         used: '已用', left: '剩余', credits: '积分', tokens: 'Tokens', requests: '次', percent: '百分比', next: '重置于', updated: '更新于', stale: '数据已过期', staleDetail: '查询未成功，以下为上次成功数据。', never: '尚无成功数据', dashboard: '官方控制台',
-        healthy: '正常', low: '额度偏低', exhausted: '额度不足', queryError: '查询异常', unavailable: '暂不可用', partial: '部分额度', scope: '统计范围', organizationShort: '组织总额', apiKeyBreakdown: '按 API Key 细分', apiKey: 'Key', apiKeyUnattributed: '组织级 / 未归属', kindBalance: '余额', kindSpend: 'API 支出', kindPlan: '订阅', kindOther: '查询状态',
-        ok: '已更新', unsupported: '尚不支持此供应商或中转端点；不会自动向官方发送其凭据。', 'admin-key-required': '未找到 Admin Key。请在 API 额外配置 Tab 输入并保存；不会使用模型调用 Key 查询费用。', 'invalid-admin-key': 'Admin Key 格式无效，需要 sk-admin- 开头的组织管理密钥；不会回退到其他密钥。', 'admin-credential-error': 'DSH 凭据服务暂不可用；请稍后重试。', adminTitle: 'OpenAI Admin Key', adminIntro: '仅用于查询 OpenAI 官方组织 API 支出。该凭据独立保存在 DSH 安全凭据存储中，不会替代模型调用 Key。', adminKeyLabel: 'Admin Key', adminKeyPlaceholder: '输入 sk-admin-… 组织管理密钥', adminConfigured: '已检测到 Admin Key；为保护密钥不回显当前值。', adminMissing: '尚未配置 Admin Key。', adminSourceCredential: '当前从 DSH 凭据服务读取。', adminSave: '安全保存 Admin Key', adminSaved: 'Admin Key 已保存并确认可用。', adminSaveFailed: '未能确认 Admin Key 已安全保存，请刷新状态后重试。', adminUseOfficial: '仅官方 OpenAI API 路由可使用此设置。花费显示组织总支出，不按单一模型路由归因。', spend: '本月 API 支出', spendShort: '本月支出', organization: '整个组织，非当前路由专属', billingLag: '账单统计可能延迟；这不是预付余额，也不包含 ChatGPT/Codex 订阅。', noRecords: '该时间段暂无账单记录', period: '账期（UTC）', 'official-costs': 'OpenAI 官方 Costs API',
-        'missing-credential': '未找到该路由使用的有效 API Key，请检查模型设置。', 'unsupported-auth': '此认证方式暂不支持。Codex 仅支持内置 openai-codex 的订阅授权，请检查「设置 → Codex 授权」；不会读取其他授权记录或猜测认证方式。', unauthorized: '认证失败（401），请检查该区域的 API Key。', forbidden: '无查询权限（403），请检查账户与套餐。', 'rate-limited': '供应商限流，已暂停重试约 2 分钟。', timeout: '查询超时，稍后可重试。', network: '无法连接供应商，请检查网络。', 'invalid-response': '额度响应暂无法识别，请以官方控制台为准。', upstream: '供应商查询失败或尚未订阅，请以官方控制台为准。',
-        'account-changed': '账户身份正在更新，本次余额已丢弃；请稍后刷新。', serviceError: '额度服务暂不可用，请刷新页面后重试。', 'official-balance': '官方余额 API', 'provider-monitor': '供应商监控端点 · 个人套餐', 'harness-account': 'Harness 账户服务', none: '暂未查询',
+        healthy: '正常', low: '额度偏低', exhausted: '额度不足', queryError: '查询异常', unavailable: '暂不可用', partial: '部分额度', scope: '统计范围', organizationShort: '组织总额', apiKeyBreakdown: '按 API Key 细分', apiKey: 'Key', apiKeyName: 'Key 名称', apiKeyUnattributed: '组织级 / 未归属', todaySpend: '今日支出（UTC）', opencodeGo: 'OpenCode Go', minimaxPlan: 'MiniMax M Plan', 'minimax-plan': 'MiniMax 官方套餐额度接口', 'opencode-go-only': '当前配置是通用 OpenCode Zen 路由；用量端点仅支持 OpenCode Go 订阅。请配置内置 opencode-go 路由。', kindBalance: '余额', kindSpend: 'API 支出', kindPlan: '订阅', kindOther: '查询状态',
+        ok: '已更新', unsupported: '尚不支持此供应商或中转端点；不会自动向官方发送其凭据。', 'admin-key-required': '未找到 Admin Key。请在 API 额外配置 Tab 输入并保存；不会使用模型调用 Key 查询费用。', 'invalid-admin-key': 'Admin Key 格式无效，需要 sk-admin- 开头的组织管理密钥；不会回退到其他密钥。', 'admin-credential-error': 'DSH 凭据服务暂不可用；请稍后重试。', adminTitle: 'OpenAI Admin Key', adminIntro: '用于查询 OpenAI 官方组织支出及可选的 API Key 名称。该凭据独立保存在 DSH 安全凭据存储中，不会替代模型调用 Key。', adminKeyLabel: 'Admin Key', adminKeyPlaceholder: '输入 sk-admin-… 组织管理密钥', adminConfigured: '已检测到 Admin Key；为保护密钥不回显当前值。', adminMissing: '尚未配置 Admin Key。', adminSourceCredential: '当前从 DSH 凭据服务读取。', adminSave: '安全保存 Admin Key', adminSaved: 'Admin Key 已保存并确认可用。', adminSaveFailed: '未能确认 Admin Key 已安全保存，请刷新状态后重试。', adminUseOfficial: '仅官方 OpenAI API 路由可使用此设置。花费显示组织总支出，不按单一模型路由归因。', spend: '本月 API 支出', spendShort: '本月支出', organization: '整个组织，非当前路由专属', billingLag: '账单统计可能延迟；这不是预付余额，也不包含 ChatGPT/Codex 订阅。', noRecords: '该时间段暂无账单记录', period: '账期（UTC）', 'official-costs': 'OpenAI 官方 Costs API',
+        'missing-credential': '未找到该路由使用的有效 API Key，请检查模型设置。', 'unsupported-auth': '此认证方式暂不支持。Codex 仅支持内置 openai-codex 的订阅授权，请检查「设置 → Codex 授权」；不会读取其他授权记录或猜测认证方式。', unauthorized: '认证失败（401），请检查该区域的 API Key。', forbidden: '无查询权限（403），请检查账户与套餐。', 'rate-limited': '供应商限流，已暂停重试约 2 分钟。', timeout: '查询超时，稍后可重试。', network: '无法连接供应商，请检查网络。', 'network-connect': '无法建立到 OpenCode Go 用量接口的请求连接。', 'network-read': '已收到 OpenCode Go 响应，但读取响应流时连接中断。', 'invalid-response': '额度响应暂无法识别，请以官方控制台为准。', upstream: '供应商查询失败或尚未订阅，请以官方控制台为准。',
+        'account-changed': '账户身份正在更新，本次余额已丢弃；请稍后刷新。', serviceError: '额度服务暂不可用，请刷新页面后重试。', 'official-balance': '官方余额 API', 'provider-monitor': '供应商监控端点 · 个人套餐', 'harness-account': 'Harness 账户服务', 'opencode-usage': 'OpenCode 官方用量接口', none: '暂未查询',
         overviewTab: '额度概览', colorsTab: '颜色设置', apiExtraTab: 'API额外配置', settingsTitle: '订阅颜色阈值', settingsIntro: '在此直接调整数值并保存，无需编辑配置文件。每个订阅窗口独立计算，现金余额颜色不受影响。', greenMin: '绿色最低剩余百分比', orangeMin: '橙色最低剩余百分比', thresholdRules: '剩余 ≥ 绿色阈值为绿色；否则剩余 ≥ 橙色阈值为橙色；其余为红色。颜色固定跟随主题，不可编辑。', save: '保存设置', defaults: '恢复默认到草稿', saved: '设置已保存并回读确认。', settingsLoading: '正在读取设置…', readOnly: '当前配置不可写；可以查看，但不能保存。', settingsRefresh: '重新载入已保存值', defaultsNote: '默认绿色 50%、橙色 25%。恢复默认只修改草稿，仍需点击保存。',
         'invalid-thresholds': '请输入非空整数，满足 0 ≤ 橙色阈值 < 绿色阈值 ≤ 100。', 'settings-unavailable': '额度设置暂不可用，请重新载入后重试。', 'settings-conflict': '设置已变化，保存未获确认。请重新载入后重试。', 'save-failed': '保存未获确认，请重新载入检查实际已保存值。', settingsForbidden: '设置校验已过期或无写入权限，请重新载入后重试。',
         'codex-usage': 'Codex 订阅用量', 'codex-auth-required': '尚未保存 Codex 订阅授权，请在「设置 → Codex 授权」中登录。', 'codex-auth-expired': 'Codex 订阅授权已过期。可正常使用内置 openai-codex 模型让原生适配器续期，或前往「设置 → Codex 授权」重新登录；本插件不会自动续期或发起推理。',
@@ -94,11 +94,12 @@ window.__ModuleLoader__.load({
         'invalid-thresholds': 'Enter non-empty integers satisfying 0 ≤ orange < green ≤ 100.', 'settings-unavailable': 'Quota settings are unavailable. Reload and try again.', 'settings-conflict': 'Settings changed; saving was not confirmed. Reload and try again.', 'save-failed': 'Saving was not confirmed. Reload to check the actual saved values.', settingsForbidden: 'The settings check expired or write access is unavailable. Reload and try again.',
         'codex-usage': 'Codex subscription usage', 'codex-auth-required': 'No Codex subscription grant is saved. Sign in under Settings → Codex authorization.', 'codex-auth-expired': 'The Codex grant expired. Normal use of the built-in openai-codex model lets its native adapter renew it, or sign in again under Settings → Codex authorization. This plugin never refreshes grants or sends inference probes.',
         api: 'API balances & spend', subscription: 'Subscriptions', account: 'App account', current: 'Current provider quota', details: 'Quota details', close: 'Close quota details',
-        balance: 'Available balance', recharge: 'Recharge balance', bonus: 'Bonus balance', rolling: '5-hour', weekly: 'Weekly limit', mcp: 'MCP tools', quota: 'Quota window', used: 'Used', left: 'Left', credits: 'credits', tokens: 'tokens', requests: 'requests', percent: 'percent', next: 'Reset at', updated: 'Updated', stale: 'Stale data', staleDetail: 'The query failed. Showing the last successful data.', never: 'No successful data yet', dashboard: 'Official dashboard',
-        healthy: 'Healthy', low: 'Running low', exhausted: 'Quota low', queryError: 'Query failed', unavailable: 'Unavailable', partial: 'Partial quota', scope: 'Scope', organizationShort: 'Organization', apiKeyBreakdown: 'By API key', apiKey: 'Key', apiKeyUnattributed: 'Organization-level / unattributed', kindBalance: 'Balance', kindSpend: 'API spend', kindPlan: 'Subscription', kindOther: 'Query status',
-        ok: 'Updated', unsupported: 'This provider or relay endpoint is not supported. Its credentials are not sent to an official provider automatically.', 'admin-key-required': 'No Admin key is configured. Enter and save one in the API extras tab. Inference keys are never used for billing.', 'invalid-admin-key': 'Invalid Admin key format. An organization key starting with sk-admin- is required; no other key is tried.', 'admin-credential-error': 'The DSH credential service is unavailable. Try again later.', adminTitle: 'OpenAI Admin key', adminIntro: 'Used only for OpenAI organization API spend. Stored separately in the DSH credential store; it never replaces your inference key.', adminKeyLabel: 'Admin key', adminKeyPlaceholder: 'Enter organization key starting with sk-admin-', adminConfigured: 'An Admin key is configured. Its value is never shown again.', adminMissing: 'No Admin key is configured.', adminSourceCredential: 'Currently read from DSH credentials.', adminSave: 'Save Admin key securely', adminSaved: 'The Admin key was saved and confirmed.', adminSaveFailed: 'Could not confirm the Admin key was securely saved. Refresh status and try again.', adminUseOfficial: 'Only official OpenAI API routes use this setting. Spend is organization-wide and is not attributed to an individual model route.', spend: 'Month-to-date API spend', spendShort: 'Month to date', organization: 'Entire organization, not exclusive to this route', billingLag: 'Billing data may lag. This is not prepaid balance and excludes ChatGPT/Codex subscriptions.', noRecords: 'No billing records for this range', period: 'Billing period (UTC)', 'official-costs': 'Official OpenAI Costs API',
-        'missing-credential': 'No valid API key was found for this route. Check Models settings.', 'unsupported-auth': 'This authentication method is unsupported. Codex requires the built-in openai-codex subscription grant; check Settings → Codex authorization. Other grants are not read and authentication is never guessed.', unauthorized: 'Authentication failed (401). Check the key and region.', forbidden: 'Quota access denied (403). Check the account and plan.', 'rate-limited': 'Rate limited. Retrying is paused for about 2 minutes.', timeout: 'The quota query timed out. Try again later.', network: 'Could not reach the provider. Check the network.', 'invalid-response': 'Unrecognized quota response. Check the official dashboard.', upstream: 'Quota query failed or no active plan. Check the official dashboard.',
-        'account-changed': 'Account identity is changing. This balance was discarded; refresh shortly.', serviceError: 'Quota service is unavailable. Reload the page and try again.', 'official-balance': 'Official balance API', 'provider-monitor': 'Provider monitor · Personal plan', 'harness-account': 'Harness account service', none: 'Not queried', note: 'Balances / quotas refresh about every 2 minutes; organization costs cache for 15 minutes. Paused while hidden. Keys stay on the Host.', notFound: 'No quota data for the current provider', counts: 'Used / total', sourceDetails: 'Data details', route: 'Provider route', exact: 'Exact amount', cnPlan: 'GLM Coding · China', globalPlan: 'GLM Coding · Global', accountName: 'DeepSeek account',
+        balance: 'Available balance', recharge: 'Recharge balance', bonus: 'Bonus balance', rolling: '5-hour', weekly: 'Weekly limit', monthly: 'Monthly', mcp: 'MCP tools', quota: 'Quota window', used: 'Used', left: 'Left', credits: 'credits', tokens: 'tokens', requests: 'requests', percent: 'percent', next: 'Reset at', updated: 'Updated', stale: 'Stale data', staleDetail: 'The query failed. Showing the last successful data.', never: 'No successful data yet', dashboard: 'Official dashboard',
+        healthy: 'Healthy', low: 'Running low', exhausted: 'Quota low', queryError: 'Query failed', unavailable: 'Unavailable', partial: 'Partial quota', scope: 'Scope', organizationShort: 'Organization', apiKeyBreakdown: 'By API key', apiKey: 'Key', apiKeyName: 'Key name', apiKeyUnattributed: 'Organization-level / unattributed', todaySpend: "Today's spend (UTC)", opencodeGo: 'OpenCode Go', minimaxPlan: 'MiniMax M Plan', 'minimax-plan': 'MiniMax official plan quota API', 'opencode-go-only': 'This is the general OpenCode Zen route; the usage endpoint is only for an OpenCode Go subscription. Configure the built-in opencode-go route.', kindBalance: 'Balance', kindSpend: 'API spend', kindPlan: 'Subscription', kindOther: 'Query status',
+        ok: 'Updated', unsupported: 'This provider or relay endpoint is not supported. Its credentials are not sent to an official provider automatically.', 'admin-key-required': 'No Admin key is configured. Enter and save one in the API extras tab. Inference keys are never used for billing.', 'invalid-admin-key': 'Invalid Admin key format. An organization key starting with sk-admin- is required; no other key is tried.', 'admin-credential-error': 'The DSH credential service is unavailable. Try again later.', adminTitle: 'OpenAI Admin key', adminIntro: 'Used for official OpenAI organization spend and optional API-key name lookup. Stored separately in the DSH credential store; it never replaces your inference key.', adminKeyLabel: 'Admin key', adminKeyPlaceholder: 'Enter organization key starting with sk-admin-', adminConfigured: 'An Admin key is configured. Its value is never shown again.', adminMissing: 'No Admin key is configured.', adminSourceCredential: 'Currently read from DSH credentials.', adminSave: 'Save Admin key securely', adminSaved: 'The Admin key was saved and confirmed.', adminSaveFailed: 'Could not confirm the Admin key was securely saved. Refresh status and try again.', adminUseOfficial: 'Only official OpenAI API routes use this setting. Spend is organization-wide and is not attributed to an individual model route.', spend: 'Month-to-date API spend', spendShort: 'Month to date', organization: 'Entire organization, not exclusive to this route', billingLag: 'Billing data may lag. This is not prepaid balance and excludes ChatGPT/Codex subscriptions.', noRecords: 'No billing records for this range', period: 'Billing period (UTC)',
+        'official-costs': 'Official OpenAI Costs API',
+        'missing-credential': 'No valid API key was found for this route. Check Models settings.', 'unsupported-auth': 'This authentication method is unsupported. Codex requires the built-in openai-codex subscription grant; check Settings → Codex authorization. Other grants are not read and authentication is never guessed.', unauthorized: 'Authentication failed (401). Check the key and region.', forbidden: 'Quota access denied (403). Check the account and plan.', 'rate-limited': 'Rate limited. Retrying is paused for about 2 minutes.', timeout: 'The quota query timed out. Try again later.', network: 'Could not reach the provider. Check the network.', 'network-connect': 'Could not establish the OpenCode Go usage request connection.', 'network-read': 'OpenCode Go responded, but its response stream was interrupted.', 'invalid-response': 'Unrecognized quota response. Check the official dashboard.', upstream: 'Quota query failed or no active plan. Check the official dashboard.',
+        'account-changed': 'Account identity is changing. This balance was discarded; refresh shortly.', serviceError: 'Quota service is unavailable. Reload the page and try again.', 'official-balance': 'Official balance API', 'provider-monitor': 'Provider monitor · Personal plan', 'harness-account': 'Harness account service', 'opencode-usage': 'OpenCode usage API', none: 'Not queried', note: 'Balances / quotas refresh about every 2 minutes; organization costs cache for 15 minutes. Paused while hidden. Keys stay on the Host.', notFound: 'No quota data for the current provider', counts: 'Used / total', sourceDetails: 'Data details', route: 'Provider route', exact: 'Exact amount', cnPlan: 'GLM Coding · China', globalPlan: 'GLM Coding · Global', accountName: 'DeepSeek account',
       },
     };
     const css = `
@@ -199,10 +200,10 @@ window.__ModuleLoader__.load({
         function number(value) {
           return new Intl.NumberFormat(ctx.locale.getLocale().active, { maximumFractionDigits: 2 }).format(value);
         }
-        function money(metric) {
+        function money(metric, options = {}) {
           const amount = Number(metric.amount);
           if (!Number.isFinite(amount)) return '—';
-          const precision = amount !== 0 && Math.abs(amount) < 0.01 ? 6 : 2;
+          const precision = options.maximumFractionDigits ?? (amount !== 0 && Math.abs(amount) < 0.01 ? 6 : 2);
           try { return new Intl.NumberFormat(ctx.locale.getLocale().active, { style: 'currency', currency: metric.currency, maximumFractionDigits: precision }).format(amount); }
           catch { return `${metric.currency} ${number(amount)}`; }
         }
@@ -211,11 +212,13 @@ window.__ModuleLoader__.load({
           if (row.name === 'zai-coding-cn') return t('cnPlan');
           if (row.name === 'zai') return t('globalPlan');
           if (row.name === 'DeepSeek Account') return t('accountName');
+          if (row.kind === 'opencode-go') return t('opencodeGo');
+          if (row.kind === 'minimax-cn') return t('minimaxPlan');
           return row.name;
         }
         function kindLabel(row) {
           if (row.metrics.some(metric => metric.type === 'spend') || row.kind === 'openai') return t('kindSpend');
-          if (['glm-cn', 'glm-global', 'codex'].includes(row.kind)) return t('kindPlan');
+          if (['glm-cn', 'glm-global', 'codex', 'opencode-go', 'minimax-cn'].includes(row.kind)) return t('kindPlan');
           return t(row.metrics.some(metric => metric.type === 'balance') || ['deepseek', 'account'].includes(row.kind) ? 'kindBalance' : 'kindOther');
         }
         function statusLabel(row, colorThresholds) {
@@ -233,15 +236,20 @@ window.__ModuleLoader__.load({
           if (metric.type === 'spend') {
             const date = value => formatQuotaDate(value, { utc: true, dateOnly: true });
             const breakdown = Array.isArray(metric.breakdown) ? metric.breakdown : [];
+            const todaySpend = Array.isArray(metric.daily) && metric.daily.length ? metric.daily.at(-1) : null;
             return h('div', { className: 'pq-metric' },
               h('div', { className: 'pq-metric-label' }, t('spend')),
               h('div', { className: 'pq-amount', title: `${metric.currency} ${metric.amount}` }, money(metric)),
               h('div', { className: 'pq-scope' }, t('organization')),
               h('div', { className: 'pq-muted' }, `${t('period')} ${date(metric.periodStart)} — ${date(metric.periodEnd)}`),
+              todaySpend ? h(Breakdown, { label: `${t('todaySpend')} · ${date(todaySpend.date)}`, value: money({ amount: todaySpend.amount, currency: metric.currency }) }) : null,
               breakdown.length > 1 ? h('div', { className: 'pq-breakdown-list', role: 'list', 'aria-label': t('apiKeyBreakdown') },
-                ...breakdown.map(entry => h('div', { className: 'pq-breakdown', role: 'listitem', key: entry.apiKeyId ?? 'org' },
-                  h('span', { title: entry.apiKeyId ?? '' }, entry.apiKeyId ? `${t('apiKey')} ${entry.apiKeyId}` : t('apiKeyUnattributed')),
-                  h('strong', null, money(entry))))) : null,
+                ...breakdown.map(entry => {
+                  const label = entry.apiKeyName || (entry.apiKeyId ? `${t('apiKey')} ${entry.apiKeyId}` : t('apiKeyUnattributed'));
+                  return h('div', { className: 'pq-breakdown', role: 'listitem', key: entry.apiKeyId ?? 'org' },
+                    h('span', { title: entry.apiKeyName ?? entry.apiKeyId ?? '' }, label),
+                    h('strong', null, money(entry)));
+                })) : null,
               metric.noRecords ? h('div', { className: 'pq-muted' }, t('noRecords')) : null,
               h('div', { className: 'pq-footnote' }, t('billingLag')));
           }
@@ -253,8 +261,8 @@ window.__ModuleLoader__.load({
           const used = Math.min(100, Math.max(0, metric.usedPercent));
           const tone = quotaBarTone(100 - used, colorThresholds);
           return h('div', { className: 'pq-metric' },
-            h('div', { className: 'pq-metric-head' }, h('span', { className: 'pq-metric-label' }, t(metric.label)), h('span', { className: `pq-quota-value${tone ? ` pq-${tone}` : ''}` }, h('small', null, t('left')), `${percent(100 - used)}%`)),
-            h('div', { className: 'pq-track', role: 'progressbar', 'aria-label': `${t(metric.label)} · ${t('used')}`, 'aria-valuemin': 0, 'aria-valuemax': 100, 'aria-valuenow': used }, h('div', { className: 'pq-fill', style: { width: `${used}%`, ...(tone ? { background: `var(--dsw-alias-state-${tone}-primary)` } : {}) } })),
+            h('div', { className: 'pq-metric-head' }, h('span', { className: 'pq-metric-label' }, `${metric.model ? `${metric.model} · ` : ''}${t(metric.label)}`), h('span', { className: `pq-quota-value${tone ? ` pq-${tone}` : ''}` }, h('small', null, t('left')), `${percent(100 - used)}%`)),
+            h('div', { className: 'pq-track', role: 'progressbar', 'aria-label': `${metric.model ? `${metric.model} · ` : ''}${t(metric.label)} · ${t('used')}`, 'aria-valuemin': 0, 'aria-valuemax': 100, 'aria-valuenow': used }, h('div', { className: 'pq-fill', style: { width: `${used}%`, ...(tone ? { background: `var(--dsw-alias-state-${tone}-primary)` } : {}) } })),
             h('div', { className: 'pq-breakdown' }, h('span', null, `${t('used')} ${percent(used)}%`), metric.total !== undefined ? h('strong', null, `${metric.remaining !== undefined ? number(metric.remaining) : '—'} / ${number(metric.total)} ${t(metric.unit)} ${t('left')}`) : null),
             metric.resetsAt ? h(ResetTime, { value: metric.resetsAt }) : null);
         }
@@ -443,9 +451,9 @@ window.__ModuleLoader__.load({
             if (target) { event.preventDefault(); setTab(target); tabRefs.current[target]?.focus(); }
           };
           const groups = [
-            ['subscription', row => ['glm-cn', 'glm-global', 'codex'].includes(row.kind)],
+            ['subscription', row => ['glm-cn', 'glm-global', 'codex', 'opencode-go', 'minimax-cn'].includes(row.kind)],
             ['account', row => row.kind === 'account'],
-            ['api', row => !['account', 'glm-cn', 'glm-global', 'codex'].includes(row.kind)],
+            ['api', row => !['account', 'glm-cn', 'glm-global', 'codex', 'opencode-go', 'minimax-cn'].includes(row.kind)],
           ];
           const tabLabel = id => t(id === 'overview' ? 'overviewTab' : id === 'colors' ? 'colorsTab' : 'apiExtraTab');
           return h('section', { className: 'pq-page', 'aria-label': t('title') }, h('style', null, css),
@@ -526,7 +534,7 @@ window.__ModuleLoader__.load({
           if (!row) return state.error ? h('div', { className: 'pq-dock pq-muted' }, t('serviceError')) : null;
           const segments = dockMetricItems(row.metrics, colorThresholds).map(item => {
             const { metric } = item;
-            const text = metric.type === 'spend' ? `${t('spendShort')} ${money(metric)} · ${t('organizationShort')}` : metric.type === 'balance' ? `${metric.wallet === 'bonus' ? t('bonus') + ' ' : ''}${money(metric)}` : `${t(metric.label)} ${t('left')} ${percent(item.remainingPercent)}%`;
+            const text = metric.type === 'spend' ? `${t('spendShort')} ${money(metric)} · ${t('organizationShort')}` : metric.type === 'balance' ? `${metric.wallet === 'bonus' ? t('bonus') + ' ' : ''}${money(metric)}` : `${metric.model ? `${metric.model} · ` : ''}${t(metric.label)} ${t('left')} ${percent(item.remainingPercent)}%`;
             return { text, tone: item.tone };
           });
           const text = segments.map(segment => segment.text).join(' · ');

@@ -2,6 +2,14 @@
 
 All notable changes are documented here. Dates are UTC.
 
+## 0.7.0 — 2026-11-13
+
+- Added read-only MiniMax China M Plan quota through the official `/v1/token_plan/remains` endpoint; recognizes DSH's built-in `minimax-cn` default `https://api.minimaxi.com/anthropic` as well as `api.minimax.cn`; only reported remaining percentages are normalized, and ambiguous count fields are ignored.
+- Classifies registered-only official provider routes without guessing credentials; MiniMax shows a missing-credential status rather than unsupported when only registry metadata is available.
+- Added read-only OpenCode Go subscription usage (rolling / weekly / monthly percentages and reset timestamps), restricted to the built-in `opencode-go` provider or the exact Go API base path; generic OpenCode Zen routes are never sent to this endpoint.
+- OpenAI organization Costs now includes UTC daily spend alongside month-to-date totals and marks missing records per currency; API-key breakdowns can show best-effort names from the official project-key endpoint, while retaining ID fallback.
+- MiniMax M Plan uses the official CN remains URL and Bearer-key auth. MiniMax CN route recognition was confirmed on the live DSH page; live M Plan subscription-account response validation remains pending. OpenCode Go has synthetic-test coverage only; live subscription-account verification remains pending.
+
 ## 0.6.0 — 2026-11-10
 
 First public-ready release.

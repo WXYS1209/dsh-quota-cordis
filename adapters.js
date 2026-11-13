@@ -1,5 +1,6 @@
 // Pure data adapters. No network, credentials, clock, or Harness dependencies.
-// Shape references (reviewed 2026-11-05):
+// Shape references:
+// MiniMax M Plan endpoint and windows: https://platform.minimax.cn/docs/m-plan/faq.md
 // https://api-docs.deepseek.com/api/get-user-balance/
 // https://github.com/zai-org/zai-coding-plugins/blob/main/plugins/glm-plan-usage/skills/usage-query-skill/scripts/query-usage.mjs
 // https://github.com/steipete/CodexBar/blob/main/docs/zai.md
@@ -9,6 +10,8 @@ const DASHBOARDS = Object.freeze({
   deepseek: 'https://platform.deepseek.com/usage',
   'glm-cn': 'https://bigmodel.cn/coding-plan/personal/usage',
   'glm-global': 'https://z.ai/manage-apikey/coding-plan/personal/my-plan',
+  'minimax-cn': 'https://platform.minimax.cn/console/usage',
+  'opencode-go': 'https://opencode.ai/console',
   openai: 'https://platform.openai.com/usage',
   codex: 'https://chatgpt.com/codex/cloud/settings/analytics#usage',
 });
@@ -16,6 +19,8 @@ const HOSTS = Object.freeze({
   'api.deepseek.com': 'deepseek',
   'open.bigmodel.cn': 'glm-cn',
   'api.z.ai': 'glm-global',
+  'api.minimax.cn': 'minimax-cn',
+  'api.minimaxi.com': 'minimax-cn',
   'api.openai.com': 'openai',
 });
 const ROUTES = Object.freeze({
@@ -24,6 +29,8 @@ const ROUTES = Object.freeze({
   openai: 'openai',
   zai: 'glm-global',
   'zai-coding-cn': 'glm-cn',
+  'minimax-cn': 'minimax-cn',
+  'opencode-go': 'opencode-go',
 });
 const own = (object, key) => Object.prototype.hasOwnProperty.call(object, key);
 const object = value => value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -49,8 +56,12 @@ export function classifyProvider({ provider, baseURL } = {}) {
     }
     try {
       const url = new URL(baseURL);
-      if (url.protocol === 'https:' && !url.username && !url.password && !url.port && own(HOSTS, url.hostname)) {
-        kind = HOSTS[url.hostname];
+      if (url.protocol === 'https:' && !url.username && !url.password && !url.port) {
+        if (url.hostname === 'opencode.ai') {
+          if (/^\/zen\/go\/v1\/?$/.test(url.pathname) && !url.search && !url.hash) kind = 'opencode-go';
+        } else if (own(HOSTS, url.hostname)) {
+          kind = HOSTS[url.hostname];
+        }
       }
     } catch { /* Fail closed, including malformed explicit URLs. */ }
   } else if (typeof provider === 'string' && own(ROUTES, provider)) {
@@ -146,6 +157,86 @@ export function parseGlm(json) {
       metric.resetsAt = row.nextResetTime;
     }
     metrics.push(metric);
+  }
+  if (!metrics.length) invalid();
+  return metrics;
+}
+
+function minimaxTimestamp(row, keys) {
+  for (const key of keys) {
+    if (!own(row, key) || row[key] === null) continue;
+    const value = row[key];
+    let timestamp;
+    if (typeof value === 'number' && Number.isSafeInteger(value)) {
+      timestamp = value >= 1_000_000_000_000 ? value : value >= 1_000_000_000 ? value * 1000 : NaN;
+    } else if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T.*(?:Z|[+-]\d{2}:?\d{2})$/.test(value)) timestamp = Date.parse(value);
+    else invalid();
+    if (!Number.isSafeInteger(timestamp) || timestamp <= 0 || timestamp > 8640000000000000) invalid();
+    return timestamp;
+  }
+  return undefined;
+}
+
+function minimaxPercent(row, key) {
+  if (!own(row, key)) return undefined;
+  const value = row[key];
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > 100) invalid();
+  return value;
+}
+
+/** Normalize the official MiniMax M Plan / Token Plan remains response.
+ * The API reports remaining percentages; this plugin's quota contract uses
+ * usedPercent. Ambiguously named usage_count fields are intentionally ignored.
+ */
+export function parseMiniMax(json) {
+  if (!object(json)) invalid();
+  const envelope = own(json, 'base_resp') ? json.base_resp : null;
+  if (envelope !== null) {
+    if (!object(envelope) || !Number.isSafeInteger(envelope.status_code)) invalid();
+    if (envelope.status_code !== 0) throw new Error('upstream');
+  }
+  if (own(json, 'status_code') && json.status_code !== 0) {
+    if (!Number.isSafeInteger(json.status_code)) invalid();
+    throw new Error('upstream');
+  }
+  const data = own(json, 'data') ? json.data : json;
+  if (!object(data) || !Array.isArray(data.model_remains)) invalid();
+  const metrics = [];
+  for (const row of data.model_remains) {
+    if (!object(row)) invalid();
+    const model = row.model_name ?? row.model;
+    if (model !== undefined && model !== null && (typeof model !== 'string' || model.length > 80 || /[\u0000-\u001f\u007f]/.test(model))) invalid();
+    const start = minimaxTimestamp(row, ['start_time', 'current_interval_start_time']);
+    const end = minimaxTimestamp(row, ['end_time', 'current_interval_reset_time', 'interval_end_time']);
+    const intervalRemaining = minimaxPercent(row, 'current_interval_remaining_percent');
+    const weeklyOnlyModel = typeof model === 'string' && /image|video/i.test(model);
+    if (intervalRemaining !== undefined && !weeklyOnlyModel) {
+      const durationMs = start !== undefined && end !== undefined ? end - start : undefined;
+      if (durationMs !== undefined && durationMs <= 0) invalid();
+      const metric = {
+        type: 'quota-window',
+        label: durationMs === 18_000_000 ? 'rolling' : durationMs === undefined ? 'rolling' : 'quota',
+        unit: 'percent',
+        usedPercent: 100 - intervalRemaining,
+        ...(durationMs !== undefined && durationMs % 1000 === 0 ? { durationSeconds: durationMs / 1000 } : {}),
+        ...(end !== undefined ? { resetsAt: end } : {}),
+        ...(typeof model === 'string' && model ? { model } : {}),
+      };
+      metrics.push(metric);
+    }
+    const weeklyStart = minimaxTimestamp(row, ['weekly_start_time']);
+    const weeklyEnd = minimaxTimestamp(row, ['weekly_end_time', 'current_weekly_reset_time']);
+    const weeklyRemaining = minimaxPercent(row, 'current_weekly_remaining_percent');
+    if (weeklyRemaining !== undefined) {
+      metrics.push({
+        type: 'quota-window', label: 'weekly', unit: 'percent', usedPercent: 100 - weeklyRemaining,
+        durationSeconds: 604800,
+        ...(weeklyEnd !== undefined ? { resetsAt: weeklyEnd } : {}),
+        ...(typeof model === 'string' && model ? { model } : {}),
+      });
+    }
+    // Validate paired weekly timestamps even though only the end is displayed.
+    if (weeklyStart !== undefined && weeklyEnd !== undefined && weeklyEnd <= weeklyStart) invalid();
   }
   if (!metrics.length) invalid();
   return metrics;

@@ -1,7 +1,9 @@
 import { createHash } from 'node:crypto';
-import { classifyProvider, parseDeepSeek, parseGlm } from './adapters.js';
+import { classifyProvider, parseDeepSeek, parseGlm, parseMiniMax } from './adapters.js';
 import { resolveOpenAIAdminKey } from './openai-admin.js';
 import { queryOpenAICosts } from './openai-costs.js';
+import { queryOpenAIKeyNames } from './openai-key-names.js';
+import { queryOpenCodeUsage } from './opencode-usage.js';
 import { resolveNativeCodexCredential, queryCodexUsage } from './codex-usage.js';
 import { DEFAULT_COLOR_THRESHOLDS, validateColorThresholds } from './quota-settings.js';
 
@@ -9,6 +11,7 @@ const ENDPOINTS = Object.freeze({
   deepseek: 'https://api.deepseek.com/user/balance',
   'glm-cn': 'https://open.bigmodel.cn/api/monitor/usage/quota/limit',
   'glm-global': 'https://api.z.ai/api/monitor/usage/quota/limit',
+  'minimax-cn': 'https://www.minimax.cn/v1/token_plan/remains',
 });
 const TTL = 120_000;
 const own = (object, key) => Object.prototype.hasOwnProperty.call(object ?? {}, key);
@@ -40,9 +43,10 @@ export async function readJson(url, key, { fetcher = fetch, signal } = {}) {
   const combined = AbortSignal.any([AbortSignal.timeout(12_000), ...(signal ? [signal] : [])]);
   let response;
   try {
+    const bearerAuth = url === ENDPOINTS.deepseek || url === ENDPOINTS['minimax-cn'];
     response = await fetcher(url, {
       method: 'GET', redirect: 'error', signal: combined,
-      headers: { Authorization: url.includes('deepseek.com') ? `Bearer ${key}` : key, Accept: 'application/json' },
+      headers: { Authorization: bearerAuth ? `Bearer ${key}` : key, Accept: 'application/json' },
     });
   } catch {
     throw failure(combined.aborted ? 'timeout' : 'network');
@@ -171,6 +175,7 @@ export class QuotaManager {
         id: entry.provider,
         name: safeName(profile.displayName || entry.displayName, entry.provider),
         ...classification,
+        ...(entry.provider === 'opencode' && classification.kind === 'unsupported' ? { blocked: 'opencode-go-only', dashboardUrl: 'https://opencode.ai/console' } : {}),
         ...(authHeaders || classification.kind === 'codex' && (explicitRef || path[0] !== 'providers' || entry.nativeAuth?.oauth !== true) ? { blocked: 'unsupported-auth' } : {}),
         ...(profile.apiKeyEnv && !explicitRef ? { blocked: 'missing-credential' } : {}),
         explicitRef, refs,
@@ -179,16 +184,20 @@ export class QuotaManager {
       });
       seen.add(entry.provider);
     }
-    // Other adapters may expose only a registered route and no settings address.
+    // Registered-only known routes can still be classified, but are queried only
+    // when the registry exposes a safe credential reference for them.
     for (const entry of registered.values()) {
-      if (!seen.has(entry.id) && entry.id !== 'deepseek-account') rows.push({ id: entry.id, name: safeName(entry.name, entry.id), kind: 'unsupported' });
+      if (seen.has(entry.id) || entry.id === 'deepseek-account') continue;
+      const classification = classifyProvider({ provider: entry.id, baseURL: entry.baseURL ?? entry.defaultBaseURL });
+      const refs = (entry.nativeAuth?.env ?? []).map(credentialRef).filter(Boolean);
+      rows.push({ id: entry.id, name: safeName(entry.name, entry.id), ...classification, refs });
     }
     return rows;
   }
   async readRow(row, refresh) {
     const base = { id: row.id, name: row.name, kind: row.kind, ...(row.dashboardUrl ? { dashboardUrl: row.dashboardUrl } : {}), metrics: [] };
-    if (row.kind === 'unsupported') return { ...base, status: 'unsupported', source: 'none' };
     if (row.blocked && row.kind !== 'openai') return { ...base, status: row.blocked, source: 'none' };
+    if (row.kind === 'unsupported') return { ...base, status: 'unsupported', source: 'none' };
     let identity;
     let accountIdentity;
     let codexCredential;
@@ -208,7 +217,8 @@ export class QuotaManager {
         key = await this.adminKeyResolver();
         if (!key) return { ...base, status: 'admin-key-required', source: 'none' };
         const date = new Date(this.now());
-        identity = `openai:${hash(key)}:${date.getUTCFullYear()}-${date.getUTCMonth()}`;
+        const day = Math.floor(this.now() / 86_400_000);
+        identity = `openai:${hash(key)}:${date.getUTCFullYear()}-${date.getUTCMonth()}:${day}`;
       } else {
         key = await this.resolveKey(row);
         if (!key) return { ...base, status: 'missing-credential', source: 'none' };
@@ -226,7 +236,7 @@ export class QuotaManager {
     const existing = this.inflight.get(identity);
     if (existing) return { ...base, ...await existing };
     const operation = (async () => {
-      const source = row.kind === 'account' ? 'harness-account' : row.kind === 'codex' ? 'codex-usage' : row.kind === 'openai' ? 'official-costs' : row.kind === 'deepseek' ? 'official-balance' : 'provider-monitor';
+      const source = row.kind === 'account' ? 'harness-account' : row.kind === 'codex' ? 'codex-usage' : row.kind === 'openai' ? 'official-costs' : row.kind === 'opencode-go' ? 'opencode-usage' : row.kind === 'minimax-cn' ? 'minimax-plan' : row.kind === 'deepseek' ? 'official-balance' : 'provider-monitor';
       try {
         let metrics;
         if (row.kind === 'codex') {
@@ -236,6 +246,19 @@ export class QuotaManager {
           if (afterIdentity !== identity) throw failure('account-changed');
         } else if (row.kind === 'openai') {
           metrics = await queryOpenAICosts({ key, fetcher: this.fetcher, now: this.now(), signal: this.controller.signal, groupByApiKey: true });
+          const keys = metrics.flatMap(metric => metric.breakdown ?? []).filter(entry => entry.apiKeyId && entry.projectId);
+          let names = new Map();
+          try { names = await queryOpenAIKeyNames({ key, entries: keys, fetcher: this.fetcher, signal: this.controller.signal }); } catch { /* Name enrichment is optional; preserve Costs results. */ }
+          metrics = metrics.map(metric => metric.breakdown ? {
+            ...metric,
+            breakdown: metric.breakdown.map(entry => {
+              const { projectId, ...safe } = entry;
+              const apiKeyName = entry.apiKeyId && projectId ? names.get(`${projectId}\u0000${entry.apiKeyId}`) : undefined;
+              return { ...safe, ...(apiKeyName ? { apiKeyName } : {}) };
+            }),
+          } : metric);
+        } else if (row.kind === 'opencode-go') {
+          metrics = await queryOpenCodeUsage({ key, fetcher: this.fetcher, now: this.now(), signal: this.controller.signal });
         } else if (row.kind === 'account') {
           const result = await this.services.deepseekAccount.getBalance({ version: this.version, locale: 'zh', timezoneOffsetSeconds: -new Date().getTimezoneOffset() * 60 });
           const after = await this.accountIdentity();
@@ -247,14 +270,14 @@ export class QuotaManager {
           if (metrics.length === 0) throw failure('invalid-response');
         } else {
           const json = await readJson(ENDPOINTS[row.kind], key, { fetcher: this.fetcher, signal: this.controller.signal });
-          metrics = row.kind === 'deepseek' ? parseDeepSeek(json) : parseGlm(json);
+          metrics = row.kind === 'deepseek' ? parseDeepSeek(json) : row.kind === 'minimax-cn' ? parseMiniMax(json) : parseGlm(json);
         }
         if (this.disposed) throw failure('disposed');
         const value = { status: 'ok', source, metrics, fetchedAt: this.now(), stale: false };
         if (cacheable) this.cache.set(identity, { value, status: 'ok', attemptedAt: time, nextAttemptAt: this.now() + (row.kind === 'openai' ? 900_000 : TTL), touchedAt: this.now() });
         return value;
       } catch (error) {
-        const allowed = ['unauthorized', 'forbidden', 'rate-limited', 'timeout', 'network', 'invalid-response', 'upstream', 'disposed', 'account-changed', 'codex-auth-required', 'codex-auth-expired', 'unsupported-auth'];
+        const allowed = ['unauthorized', 'forbidden', 'rate-limited', 'timeout', 'network', 'network-connect', 'network-read', 'invalid-response', 'upstream', 'disposed', 'account-changed', 'codex-auth-required', 'codex-auth-expired', 'unsupported-auth'];
         const status = allowed.includes(error.code || error.message) ? error.code || error.message : 'upstream';
         if (row.kind === 'codex') {
           let scopeFailure = ['account-changed', 'codex-auth-required', 'codex-auth-expired', 'unsupported-auth'].includes(status) ? status : null;
@@ -295,6 +318,6 @@ export class QuotaManager {
     }));
     for (const [id, item] of this.cache) if (this.now() - item.touchedAt > 3_600_000) this.cache.delete(id);
     const defaultProvider = this.services.agentDefaultModel?.currentSelection()?.provider;
-    return { rows, checkedAt: this.now(), refreshAfterMs: TTL, pluginVersion: '0.6.0', colorThresholds: validateColorThresholds(this.colorThresholdsProvider()), ...(defaultProvider ? { defaultProvider } : {}) };
+    return { rows, checkedAt: this.now(), refreshAfterMs: TTL, pluginVersion: '0.7.0', colorThresholds: validateColorThresholds(this.colorThresholdsProvider()), ...(defaultProvider ? { defaultProvider } : {}) };
   }
 }

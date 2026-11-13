@@ -1,4 +1,4 @@
-// Organization-wide month-to-date costs, not account balance or inference-key usage.
+// Organization-wide month-to-date costs and recent daily history, not account balance or inference-key usage.
 // Contract: https://developers.openai.com/api/reference/resources/admin/subresources/organization/subresources/usage.md
 const ENDPOINT = 'https://api.openai.com/v1/organization/costs';
 const MAX_BODY = 1_048_576;
@@ -94,28 +94,33 @@ export async function queryOpenAICosts({ key, fetcher = fetch, now = Date.now(),
   if (!Number.isSafeInteger(now) || now < 0 || now > 8_640_000_000_000_000) invalid();
   if (signal !== undefined && !(signal instanceof AbortSignal)) invalid();
   if (typeof groupByApiKey !== 'boolean') invalid();
-  const start = new Date(now);
-  start.setUTCDate(1);
-  start.setUTCHours(0, 0, 0, 0);
-  const periodStart = start.getTime();
-  const startSec = Math.floor(periodStart / 1000);
+  const month = new Date(now);
+  month.setUTCDate(1);
+  month.setUTCHours(0, 0, 0, 0);
+  const periodStart = month.getTime();
   const endSec = Math.floor(now / 1000);
   const periodEnd = endSec * 1000;
+  const currentDayStart = Math.floor(now / 86_400_000) * 86_400_000;
+  const weekStart = currentDayStart - 6 * 86_400_000;
+  const queryStart = Math.min(periodStart, weekStart);
+  const startSec = Math.floor(queryStart / 1000);
+  const periodStartSec = Math.floor(periodStart / 1000);
   const shared = { type: 'spend', periodStart, periodEnd, timezone: 'UTC', scope: 'organization' };
-  // The API accepts whole Unix seconds and end_time is exclusive. During the
-  // first second of a UTC month both boundaries quantize to the same instant;
-  // an empty month-to-date range is known to contain no records and needs no call.
+  // The API accepts whole Unix seconds and end_time is exclusive. At month
+  // start, the daily history may still require querying previous UTC days.
   if (endSec === startSec) {
     if (signal?.aborted) throw error('timeout');
-    return [{ ...shared, amount: '0', currency: 'USD', noRecords: true }];
+    return [{ ...shared, amount: '0', currency: 'USD', noRecords: true, daily: Array.from({ length: 7 }, (_, index) => ({ date: weekStart + index * 86_400_000, amount: '0' })) }];
   }
   const combined = AbortSignal.any([AbortSignal.timeout(25_000), ...(signal ? [signal] : [])]);
   const sums = new Map();
   const perKey = new Map();
+  const projectsByKey = new Map();
+  const dailySums = new Map();
   const cursors = new Set();
   const buckets = new Set();
   let cursor;
-  let records = 0;
+  const monthRecords = new Map();
   {
     for (let index = 0; index < MAX_PAGES; index++) {
       aborted(combined);
@@ -124,7 +129,10 @@ export async function queryOpenAICosts({ key, fetcher = fetch, now = Date.now(),
       url.searchParams.set('end_time', String(endSec));
       url.searchParams.set('bucket_width', '1d');
       url.searchParams.set('limit', '180');
-      if (groupByApiKey) url.searchParams.set('group_by', 'api_key_id');
+      if (groupByApiKey) {
+        url.searchParams.append('group_by', 'project_id');
+        url.searchParams.append('group_by', 'api_key_id');
+      }
       if (cursor !== undefined) url.searchParams.set('page', cursor);
       let response;
       try {
@@ -146,14 +154,28 @@ export async function queryOpenAICosts({ key, fetcher = fetch, now = Date.now(),
             typeof result.amount.currency !== 'string' || !/^[a-zA-Z]{3}$/.test(result.amount.currency)) invalid();
           if (result.api_key_id !== undefined && result.api_key_id !== null &&
             (typeof result.api_key_id !== 'string' || !result.api_key_id || result.api_key_id.length > 256 || !/^[\x21-\x7e]+$/.test(result.api_key_id))) invalid();
+          if (result.project_id !== undefined && result.project_id !== null &&
+            (typeof result.project_id !== 'string' || !result.project_id || result.project_id.length > 256 || !/^[\x21-\x7e]+$/.test(result.project_id))) invalid();
           const currency = result.amount.currency.toUpperCase();
           const amount = decimal(result.amount.value);
-          sums.set(currency, add(sums.get(currency) ?? { integer: 0n, scale: 0 }, amount));
-          if (groupByApiKey) {
-            const slot = `${currency}\u0000${result.api_key_id ?? ''}`;
-            perKey.set(slot, add(perKey.get(slot) ?? { integer: 0n, scale: 0 }, amount));
+          const day = Math.floor(bucket.start_time * 1000 / 86_400_000) * 86_400_000;
+          if (day >= weekStart && day <= currentDayStart) {
+            const dailySlot = `${currency}\u0000${day}`;
+            dailySums.set(dailySlot, add(dailySums.get(dailySlot) ?? { integer: 0n, scale: 0 }, amount));
           }
-          records++;
+          if (bucket.start_time >= periodStartSec) {
+            sums.set(currency, add(sums.get(currency) ?? { integer: 0n, scale: 0 }, amount));
+            if (groupByApiKey) {
+              const slot = `${currency}\u0000${result.api_key_id ?? ''}`;
+              perKey.set(slot, add(perKey.get(slot) ?? { integer: 0n, scale: 0 }, amount));
+              if (result.api_key_id && result.project_id) {
+                let projects = projectsByKey.get(slot);
+                if (!projects) projectsByKey.set(slot, projects = new Set());
+                projects.add(result.project_id);
+              }
+            }
+            monthRecords.set(currency, (monthRecords.get(currency) ?? 0) + 1);
+          }
         }
       }
       if (!page.has_more) {
@@ -169,13 +191,23 @@ export async function queryOpenAICosts({ key, fetcher = fetch, now = Date.now(),
   const breakdown = groupByApiKey ? [...perKey]
     .map(([slot, amount]) => {
       const [currency, apiKeyId] = slot.split('\u0000');
-      return { apiKeyId: apiKeyId || null, currency, amount: format(amount) };
+      const projects = projectsByKey.get(slot);
+      return { apiKeyId: apiKeyId || null, ...(projects?.size === 1 ? { projectId: [...projects][0] } : {}), currency, amount: format(amount) };
     })
     .sort((a, b) => Number(b.amount) - Number(a.amount) || a.currency.localeCompare(b.currency) || (a.apiKeyId ?? '').localeCompare(b.apiKeyId ?? ''))
     : undefined;
-  if (!records) return [{ ...shared, amount: '0', currency: 'USD', noRecords: true }];
-  return [...sums].sort(([a], [b]) => a.localeCompare(b)).map(([currency, amount]) => ({
-    ...shared, amount: format(amount), currency,
-    ...(breakdown ? { breakdown: breakdown.filter(entry => entry.currency === currency) } : {}),
-  }));
+  const currencies = new Set([...sums.keys(), ...[...dailySums.keys()].map(slot => slot.split('\u0000')[0])]);
+  if (!currencies.size) currencies.add('USD');
+  return [...currencies].sort((a, b) => a.localeCompare(b)).map(currency => {
+    const daily = Array.from({ length: 7 }, (_, index) => {
+      const date = weekStart + index * 86_400_000;
+      const value = dailySums.get(`${currency}\u0000${date}`) ?? { integer: 0n, scale: 0 };
+      return { date, amount: format(value) };
+    });
+    return {
+      ...shared, amount: format(sums.get(currency) ?? { integer: 0n, scale: 0 }), currency, daily,
+      ...(monthRecords.get(currency) === undefined ? { noRecords: true } : {}),
+      ...(breakdown ? { breakdown: breakdown.filter(entry => entry.currency === currency) } : {}),
+    };
+  });
 }

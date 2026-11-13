@@ -20,10 +20,21 @@ function fixture() {
     fetcher: async (url, options) => {
       state.calls++;
       assert.equal(new URL(url).origin, 'https://api.openai.com');
-      assert.equal(new URL(url).pathname, '/v1/organization/costs');
+      const parsed = new URL(url);
+      assert.equal(parsed.pathname === '/v1/organization/costs' || /^\/v1\/organization\/projects\/[^/]+\/api_keys\/[^/]+$/.test(parsed.pathname), true);
+      if (parsed.pathname === '/v1/organization/costs') assert.equal(parsed.searchParams.get('bucket_width'), '1d');
       assert.equal(options.headers.Authorization, `Bearer ${state.admin}`);
       if (state.status !== 200) return Response.json({ error: 'private-upstream-body' }, { status: state.status });
-      return Response.json({ object: 'page', has_more: false, next_page: null, data: [{ object: 'bucket', start_time: Date.UTC(2026, 10, 1) / 1000, end_time: Date.UTC(2026, 10, 2) / 1000, results: [{ object: 'organization.costs.result', amount: { currency: 'usd', value: 1.25 } }] }] });
+      if (parsed.pathname.includes('/api_keys/')) {
+        const id = decodeURIComponent(parsed.pathname.slice(parsed.pathname.lastIndexOf('/') + 1));
+        return Response.json({ id, object: 'organization.project.api_key', name: 'Example Name' });
+      }
+      return Response.json({ object: 'page', has_more: false, next_page: null, data: [
+        { object: 'bucket', start_time: Date.UTC(2026, 10, 1) / 1000, end_time: Date.UTC(2026, 10, 2) / 1000, results: [
+          { object: 'organization.costs.result', amount: { currency: 'usd', value: 1.25 } },
+          { object: 'organization.costs.result', amount: { currency: 'usd', value: 0.5 }, api_key_id: 'key_Example', project_id: 'proj_Example' },
+        ] },
+      ] });
     },
   });
   return { manager, state };
@@ -37,7 +48,12 @@ test('configured official route shows separately authorized organization spend, 
     assert.equal(result.rows[0].source, 'official-costs');
     assert.equal(result.rows[0].metrics[0].type, 'spend');
     assert.equal(result.rows[0].metrics[0].scope, 'organization');
-    assert.equal(result.rows[0].metrics[0].amount, '1.25');
+    assert.equal(result.rows[0].metrics[0].amount, '1.75');
+    assert.equal(result.rows[0].metrics[0].daily.length, 7);
+    assert.deepEqual(result.rows[0].metrics[0].breakdown, [
+      { apiKeyId: null, currency: 'USD', amount: '1.25' },
+      { apiKeyId: 'key_Example', currency: 'USD', amount: '0.5', apiKeyName: 'Example Name' },
+    ]);
     assert.equal(JSON.stringify(result).includes(state.admin), false);
     assert.equal(JSON.stringify(result).includes('INFERENCE_KEY'), false);
   } finally { await manager.dispose(); }
@@ -49,17 +65,17 @@ test('spend success cache lasts 15 minutes but key rotation and UTC month change
     await manager.snapshot();
     state.now += 120001;
     await manager.snapshot();
-    assert.equal(state.calls, 1);
+    assert.equal(state.calls, 2);
     assert.equal(state.reads, 2);
     state.admin = 'sk-admin-rotated-test-key';
     await manager.snapshot();
-    assert.equal(state.calls, 2);
+    assert.equal(state.calls, 4);
     state.now += 900001;
     await manager.snapshot();
-    assert.equal(state.calls, 3);
+    assert.equal(state.calls, 6);
     state.now = Date.UTC(2026, 11, 1, 0, 1);
     await manager.snapshot();
-    assert.equal(state.calls, 4);
+    assert.equal(state.calls, 7);
   } finally { await manager.dispose(); }
 });
 
@@ -71,7 +87,7 @@ test('removing admin key never shows cached spend from a previous authorization'
     const result = await manager.snapshot();
     assert.equal(result.rows[0].status, 'admin-key-required');
     assert.deepEqual(result.rows[0].metrics, []);
-    assert.equal(state.calls, 1);
+    assert.equal(state.calls, 2);
   } finally { await manager.dispose(); }
 });
 

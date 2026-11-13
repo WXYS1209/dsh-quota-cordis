@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "供应商额度",
-    "description": "查看已配置供应商余额、GLM/Codex 订阅额度与 API 支出；凭据仅在 Host 使用。"
+    "description": "查看已配置供应商的余额、订阅额度与 API 支出；凭据仅在 Host 使用。"
   }
 }

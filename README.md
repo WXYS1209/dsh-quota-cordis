@@ -5,7 +5,6 @@
 Balances, subscription quotas and OpenAI API spend for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) Desktop. Native Host/Client plugin — no npm runtime dependencies, no install scripts.
 
 - npm: [`dsh-quota-cordis`](https://www.npmjs.com/package/dsh-quota-cordis)
-- Verified on DSH `0.2.2-rc.1` (declared via `engines.dsh`)
 - MIT licensed
 
 ## Install
@@ -28,23 +27,27 @@ dsh plugin --profile desktop add /path/to/checkout
 
 ## Provider support
 
-Discovery is generic: every provider configured in DeepSeek Harness is listed, and unsupported ones state why instead of showing a fake number. Quota queries are per-provider adapters; **only the providers below are verified end to end. Others may work but are untested — treat their rows as informational.**
+Discovery is generic: every provider configured in DeepSeek Harness is listed, and unsupported ones state why instead of showing a fake number. Quota queries are per-provider adapters; **only rows marked “Yes” are verified end to end. “Preview” rows are not yet verified end to end. Other rows are informational.**
 
 | Provider | Shown | Verified |
 |---|---|---|
 | DeepSeek (official API key) | Available / recharge / granted balance | Yes |
 | DeepSeek account (in-app sign-in) | Recharge and bonus wallets, listed separately | Yes |
 | GLM Coding Plan — China (`open.bigmodel.cn`) | Subscription windows (legacy token, credit, MCP shapes) | Yes |
-| GLM Coding Plan — global (`api.z.ai`) | Same window model | Implemented, not verified with a real account |
-| OpenAI API + separate Admin key | UTC month-to-date organization spend, per-currency, with per-API-key breakdown | Yes |
+| GLM Coding Plan — global (`api.z.ai`) | Same window model | Preview — synthetic tests only; real-account verification pending |
+| OpenAI API + separate Admin key | Authoritative UTC month-to-date/today organization spend and API-key breakdown | Yes |
 | Built-in `openai-codex` subscription | Main rate-limit windows (5-hour / weekly when reported) | Yes |
+| OpenCode Go (`opencode-go`) | Go subscription windows (5-hour / weekly / monthly when reported) | Preview — synthetic tests only; live verification pending a Go-enabled account |
+| MiniMax M Plan — China | Remaining quota | Preview |
 | Other providers and relays | Status and reason only | Not applicable |
 
 ## Configuration notes
 
-- **OpenAI Admin key** — used only for the official Costs endpoint. It is saved through the Harness credential service and takes precedence over any local file; the plugin never reads `~/.env.local` or your model inference key.
+- **OpenAI Admin key** — used only for the organization Costs endpoint and optional API-key name lookup. It is saved through the Harness credential service and takes precedence over any local file; the plugin never reads `~/.env.local` or your model inference key.
 - **Color thresholds** — saved via `configEditor` into the profile; restoring defaults only edits the draft until you save.
-- OpenAI spend covers the whole organization for the UTC month to date. Billing data can lag the dashboard and is never presented as a per-model or per-route cost, nor as remaining balance.
+- The OpenAI spend card keeps official Costs API values authoritative for whole-organization UTC month-to-date and daily spend. Its API-key breakdowns display the configured key name where the Admin endpoint permits lookup, falling back to the ID if unavailable. Billing data can lag the dashboard and is never presented as remaining balance.
+- OpenCode quota is specific to an OpenCode Go subscription and the `opencode-go` provider route. The general OpenCode Zen route is not queried as if it were a Go subscription.
+- MiniMax quota uses the official China M Plan endpoint `https://www.minimax.cn/v1/token_plan/remains` with the configured provider key as a Bearer token ([official FAQ](https://platform.minimax.cn/docs/m-plan/faq.md)). It is intended for a subscription key; the official API key and M Plan key are separate, and no officially documented pay-as-you-go balance endpoint is queried. Only server-reported remaining percentages are normalized; image/video entries use weekly windows only per the FAQ, and ambiguous `*_usage_count` fields are not used to invent a percentage. Live account verification is pending.
 
 ## Privacy and security
 
@@ -62,7 +65,7 @@ Discovery is generic: every provider configured in DeepSeek Harness is listed, a
 
 ```sh
 npm run check   # syntax check for every module
-npm test        # 140 tests: parsers, host integration, security boundaries
+npm test        # 162 tests: parsers, host integration, security boundaries
 ```
 
 ## Publishing

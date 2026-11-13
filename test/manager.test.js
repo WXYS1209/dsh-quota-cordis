@@ -11,7 +11,7 @@ function fixture({ providers = { deepseek: { apiKeyEnv: 'CUSTOM_KEY' } }, keys =
     llm: {
       listProviders: () => Object.keys(state.providers).map(id => ({ id, name: id })),
       listConfigurableProviders: () => [
-        ...Object.keys(state.providers).map(provider => ({ provider, displayName: provider, settingsNs: 'pi', settingsPath: ['providers', provider], defaultBaseURL: provider === 'deepseek' ? 'https://api.deepseek.com' : undefined, nativeAuth: { env: ['NATIVE_KEY'] } })),
+        ...Object.keys(state.providers).map(provider => ({ provider, displayName: provider, settingsNs: 'pi', settingsPath: ['providers', provider], defaultBaseURL: provider === 'deepseek' ? 'https://api.deepseek.com' : provider === 'minimax-cn' ? 'https://api.minimaxi.com/anthropic' : undefined, nativeAuth: { env: ['NATIVE_KEY'] } })),
         { provider: 'dormant', displayName: 'Dormant', settingsNs: 'pi', settingsPath: ['providers', 'dormant'] },
         ...(whole ? [{ provider: 'deepseek-official', displayName: 'DeepSeek', settingsNs: 'official', settingsPath: [] }] : []),
       ],
@@ -93,6 +93,87 @@ test('failure retains only same-credential success, marks stale and respects bac
     const rotated = await f.manager.snapshot();
     assert.deepEqual(rotated.rows[0].metrics, []);
     assert.equal(rotated.rows[0].stale, false);
+  } finally { await f.manager.dispose(); }
+});
+
+test('general OpenCode Zen never sends its key to the Go-only usage endpoint', async () => {
+  const f = fixture({ providers: { opencode: { apiKeyEnv: 'CUSTOM_KEY' } } });
+  try {
+    const result = await f.manager.snapshot();
+    assert.equal(result.rows[0].id, 'opencode');
+    assert.equal(result.rows[0].status, 'opencode-go-only');
+    assert.equal(result.rows[0].dashboardUrl, 'https://opencode.ai/console');
+    assert.equal(f.state.requests.length, 0);
+  } finally { await f.manager.dispose(); }
+});
+
+test('OpenCode Go uses its official read-only usage endpoint and maps percent windows', async () => {
+  const f = fixture({ providers: { 'opencode-go': { apiKeyEnv: 'CUSTOM_KEY' } } });
+  f.state.response = { usage: { rolling: { percent: 11, resetsAt: '2026-12-17T17:10:09.580Z' }, weekly: { percent: 4 }, monthly: { percent: 2 } } };
+  try {
+    const result = await f.manager.snapshot();
+    assert.equal(result.rows[0].kind, 'opencode-go');
+    assert.equal(result.rows[0].source, 'opencode-usage');
+    assert.equal(result.rows[0].metrics[0].usedPercent, 11);
+    assert.equal(f.state.requests.length, 1);
+    assert.equal(f.state.requests[0].url, 'https://opencode.ai/zen/go/v1/usage');
+    assert.equal(f.state.requests[0].options.headers.Authorization, 'Bearer secret-fixture-A');
+  } finally { await f.manager.dispose(); }
+});
+
+test('MiniMax CN queries only the official remains endpoint with Bearer auth and maps M Plan windows', async () => {
+  const f = fixture({ providers: { 'minimax-cn': { apiKeyEnv: 'CUSTOM_KEY' } } });
+  f.state.response = {
+    base_resp: { status_code: 0, status_msg: 'success' },
+    model_remains: [{
+      model_name: 'general', start_time: 1781834400000, end_time: 1781852400000,
+      current_interval_remaining_percent: 68, weekly_start_time: 1781452800000,
+      weekly_end_time: 1782057600000, current_weekly_remaining_percent: 41,
+    }],
+  };
+  try {
+    const result = await f.manager.snapshot();
+    assert.equal(result.rows[0].kind, 'minimax-cn');
+    assert.equal(result.rows[0].source, 'minimax-plan');
+    assert.deepEqual(result.rows[0].metrics.map(({ label, usedPercent }) => ({ label, usedPercent })), [
+      { label: 'rolling', usedPercent: 32 }, { label: 'weekly', usedPercent: 59 },
+    ]);
+    assert.equal(f.state.requests.length, 1);
+    assert.equal(f.state.requests[0].url, 'https://www.minimax.cn/v1/token_plan/remains');
+    assert.equal(f.state.requests[0].options.headers.Authorization, 'Bearer secret-fixture-A');
+    assert.equal(JSON.stringify(result).includes('secret-fixture-A'), false);
+  } finally { await f.manager.dispose(); }
+});
+
+test('registered-only MiniMax CN route is classified, but never queried without credential metadata', async () => {
+  const f = fixture({ providers: { 'minimax-cn': {} } });
+  f.services.llm.listConfigurableProviders = () => [];
+  try {
+    const result = await f.manager.snapshot();
+    assert.equal(result.rows[0].kind, 'minimax-cn');
+    assert.equal(result.rows[0].status, 'missing-credential');
+    assert.equal(f.state.requests.length, 0);
+  } finally { await f.manager.dispose(); }
+});
+
+test('MiniMax HTTP-200 error envelope is not treated as an empty successful quota', async () => {
+  const f = fixture({ providers: { 'minimax-cn': { apiKeyEnv: 'CUSTOM_KEY' } } });
+  f.state.response = { base_resp: { status_code: 1004, status_msg: 'secret upstream error' }, model_remains: [] };
+  try {
+    const result = await f.manager.snapshot();
+    assert.equal(result.rows[0].status, 'upstream');
+    assert.deepEqual(result.rows[0].metrics, []);
+    assert.equal(JSON.stringify(result).includes('secret upstream error'), false);
+  } finally { await f.manager.dispose(); }
+});
+
+test('MiniMax CN route never sends its key to an explicit custom relay', async () => {
+  const f = fixture({ providers: { 'minimax-cn': { baseURL: 'https://relay.example/v1', apiKeyEnv: 'CUSTOM_KEY' } } });
+  try {
+    const result = await f.manager.snapshot();
+    assert.equal(result.rows[0].kind, 'unsupported');
+    assert.equal(result.rows[0].status, 'unsupported');
+    assert.equal(f.state.requests.length, 0);
   } finally { await f.manager.dispose(); }
 });
 

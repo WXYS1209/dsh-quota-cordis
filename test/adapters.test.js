@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { classifyProvider, parseDeepSeek, parseGlm } from '../adapters.js';
+import { classifyProvider, parseDeepSeek, parseGlm, parseMiniMax } from '../adapters.js';
 
 const quota = (limits, extra = {}) => ({ success: true, code: 200, data: { limits }, ...extra });
 const credit = (extra = {}) => ({ type: 'CREDIT_LIMIT', unit: 3, number: 5, percentage: 42, ...extra });
@@ -9,13 +9,13 @@ const fails = fn => assert.throws(fn, { message: 'invalid-response' });
 test('only explicit known official routes are recognized without a URL', () => {
   for (const [provider, kind] of Object.entries({
     deepseek: 'deepseek', 'deepseek-official': 'deepseek', openai: 'openai',
-    zai: 'glm-global', 'zai-coding-cn': 'glm-cn',
+    zai: 'glm-global', 'zai-coding-cn': 'glm-cn', 'minimax-cn': 'minimax-cn', 'opencode-go': 'opencode-go',
   })) {
     const result = classifyProvider({ provider });
     assert.equal(result.kind, kind);
     assert.ok(result.dashboardUrl.startsWith('https://'));
   }
-  for (const provider of ['glm', 'zhipu', 'OpenAI', 'my-openai', 'deepseek-account', '__proto__', 'constructor', undefined]) {
+  for (const provider of ['glm', 'zhipu', 'OpenAI', 'my-openai', 'deepseek-account', '__proto__', 'constructor', 'opencode', undefined]) {
     assert.deepEqual(classifyProvider({ provider }), { kind: 'unsupported', dashboardUrl: null });
   }
 });
@@ -26,8 +26,15 @@ test('official HTTPS endpoint determines provider even for custom route names', 
     ['https://open.bigmodel.cn/api/coding/paas/v4', 'glm-cn'],
     ['https://api.z.ai/api/anthropic', 'glm-global'],
     ['https://api.openai.com:443/v1', 'openai'],
+    ['https://api.minimax.cn/v1', 'minimax-cn'],
+    ['https://api.minimax.cn/anthropic', 'minimax-cn'],
+    ['https://api.minimaxi.com/anthropic', 'minimax-cn'],
+
   ]) assert.equal(classifyProvider({ provider: 'custom', baseURL }).kind, kind);
   assert.equal(classifyProvider({ provider: 'openai', baseURL: 'https://api.z.ai/api/coding/paas/v4' }).kind, 'glm-global');
+  assert.equal(classifyProvider({ provider: 'custom', baseURL: 'https://opencode.ai/zen/go/v1' }).kind, 'opencode-go');
+  assert.equal(classifyProvider({ provider: 'custom', baseURL: 'https://opencode.ai/zen/v1' }).kind, 'unsupported');
+  assert.equal(classifyProvider({ provider: 'opencode-go', baseURL: 'https://opencode.ai/zen/go/v1?next=https://evil.example' }).kind, 'unsupported');
 });
 
 test('explicit unsafe or unknown URLs cannot fall back to an official route', () => {
@@ -183,5 +190,56 @@ test('optional null counts do not become zeros; total zero does not divide by ze
 });
 
 // These fixtures are deliberately synthetic and contain no real credentials or account data.
-// They exercise the legacy official script and the newer CREDIT_LIMIT shape described
-// by CodexBar; successful tests are not a claim of live supplier API compatibility.
+// They exercise known response shapes; successful tests are not a claim of live supplier API compatibility.
+
+test('MiniMax maps reported remaining percentages and window resets without inferring ambiguous counts', () => {
+  const response = {
+    base_resp: { status_code: 0, status_msg: 'success' },
+    data: { model_remains: [
+      {
+        model_name: 'general', start_time: 1781834400000, end_time: 1781852400000,
+        current_interval_remaining_percent: 98, current_interval_total_count: 1000, current_interval_usage_count: 0,
+        weekly_start_time: 1781452800000, weekly_end_time: 1782057600000,
+        current_weekly_remaining_percent: 67, current_weekly_total_count: 5000, current_weekly_usage_count: 0,
+      },
+      { model_name: 'video', weekly_end_time: 1782057600000, current_weekly_remaining_percent: 100 },
+    ] },
+  };
+  assert.deepEqual(parseMiniMax(response), [
+    { type: 'quota-window', label: 'rolling', unit: 'percent', usedPercent: 2, durationSeconds: 18000, resetsAt: 1781852400000, model: 'general' },
+    { type: 'quota-window', label: 'weekly', unit: 'percent', usedPercent: 33, durationSeconds: 604800, resetsAt: 1782057600000, model: 'general' },
+    { type: 'quota-window', label: 'weekly', unit: 'percent', usedPercent: 0, durationSeconds: 604800, resetsAt: 1782057600000, model: 'video' },
+  ]);
+});
+
+test('MiniMax accepts direct payloads and preserves explicit zero/exhausted percentages', () => {
+  const metrics = parseMiniMax({ model_remains: [
+    { model: 'text', start_time: '2026-06-18T12:00:00+08:00', end_time: '2026-06-18T17:00:00+08:00', current_interval_remaining_percent: 0 },
+    { model_name: 'image', current_interval_remaining_percent: 20, current_weekly_remaining_percent: 100 },
+    { model_name: 'audio', weekly_end_time: 1782057600, current_weekly_remaining_percent: 50 },
+  ] });
+  assert.deepEqual(metrics.map(({ label, usedPercent, model }) => ({ label, usedPercent, model })), [
+    { label: 'rolling', usedPercent: 100, model: 'text' },
+    { label: 'weekly', usedPercent: 0, model: 'image' },
+    { label: 'weekly', usedPercent: 50, model: 'audio' },
+  ]);
+  assert.equal(metrics[0].durationSeconds, 18000);
+  assert.equal(metrics[0].resetsAt, Date.parse('2026-06-18T17:00:00+08:00'));
+  assert.equal(metrics[2].resetsAt, 1782057600000);
+});
+
+test('MiniMax refuses unsuccessful envelopes, malformed percentages, and count-only responses', () => {
+  for (const response of [
+    null, {}, { data: { model_remains: [] } },
+    { base_resp: { status_code: 1002, status_msg: 'limit' }, model_remains: [] },
+    { status_code: 1004, model_remains: [] },
+    { model_remains: [{ current_interval_remaining_percent: '0' }] },
+    { model_remains: [{ current_weekly_remaining_percent: 101 }] },
+    { model_remains: [{ current_interval_total_count: 100, current_interval_usage_count: 0 }] },
+    { model_remains: [{ start_time: 20, end_time: 10, current_interval_remaining_percent: 50 }] },
+    { model_remains: [{ model_name: 'bad\nname', current_weekly_remaining_percent: 50 }] },
+  ]) {
+    if (response?.base_resp || response?.status_code) assert.throws(() => parseMiniMax(response), { message: 'upstream' });
+    else fails(() => parseMiniMax(response));
+  }
+});

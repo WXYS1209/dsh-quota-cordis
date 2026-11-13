@@ -300,14 +300,21 @@ test('OpenAI Admin Key lives in an explicit API extras tab only when an official
   assert.ok(!extra.includes("useState(data?.adminKey"));
 });
 
-test('spend metric renders per-key breakdown with organization-level fallback label', async () => {
+test('monthly spend shows UTC today spend without a chart and keeps key-name breakdowns', async () => {
   const metric = source.split('function Metric({ metric, colorThresholds })')[1].split('function Row({ row')[0];
   assert.ok(metric.includes('apiKeyBreakdown'));
-  assert.ok(metric.includes("entry.apiKeyId ? `${t('apiKey')} ${entry.apiKeyId}` : t('apiKeyUnattributed')"));
+  assert.ok(metric.includes("entry.apiKeyName || (entry.apiKeyId ? `${t('apiKey')} ${entry.apiKeyId}` : t('apiKeyUnattributed'))"));
+  assert.ok(metric.includes('metric.daily'));
+  assert.ok(metric.includes('metric.daily.at(-1)'));
+  assert.ok(metric.includes("t('todaySpend')"));
+  assert.ok(metric.includes('todaySpend.date'));
+  assert.ok(!metric.includes('SpendTrend'));
+  assert.ok(!source.includes('function SpendTrend'));
+  assert.ok(!source.includes('pq-chart-'));
   assert.ok(metric.includes('role: \'list\''));
   // The grouped request itself lives in the Host costs module.
   const costs = await readFile(new URL('../openai-costs.js', import.meta.url), 'utf8');
-  assert.ok(costs.includes("url.searchParams.set('group_by', 'api_key_id')"));
+  assert.ok(costs.includes("url.searchParams.append('group_by', 'api_key_id')"));
   assert.ok(costs.includes("...(breakdown ? { breakdown: breakdown.filter(entry => entry.currency === currency) } : {})"));
   assert.ok(costs.includes('apiKeyId: apiKeyId || null'));
 });
@@ -326,8 +333,9 @@ test('main page, popup and dock use snapshot thresholds; palette stays fixed to 
 });
 
 test('Codex joins subscriptions with fixed grant-state guidance and never triggers login', () => {
-  assert.ok(source.includes("['subscription', row => ['glm-cn', 'glm-global', 'codex'].includes(row.kind)]"));
-  assert.ok(source.includes("['api', row => !['account', 'glm-cn', 'glm-global', 'codex'].includes(row.kind)]"));
+  assert.ok(source.includes("['subscription', row => ['glm-cn', 'glm-global', 'codex', 'opencode-go', 'minimax-cn'].includes(row.kind)]"));
+  assert.ok(source.includes("['api', row => !['account', 'glm-cn', 'glm-global', 'codex', 'opencode-go', 'minimax-cn'].includes(row.kind)]"));
+  assert.ok(source.includes("opencode-go-only"));
   for (const key of ['codex-usage', 'codex-auth-required', 'codex-auth-expired']) assert.ok(source.includes(`'${key}':`));
   assert.ok(source.includes('本插件不会自动续期或发起推理'));
   assert.equal(quotaTone({ status: 'codex-auth-required', metrics: [] }), 'idle');
