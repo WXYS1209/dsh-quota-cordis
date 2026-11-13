@@ -1,6 +1,6 @@
 {
   "name": "dsh-quota-cordis",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "description": "Provider balances, subscription quotas and OpenAI API spend for DeepSeek Harness",
   "license": "MIT",
   "repository": { "type": "git", "url": "git+https://github.com/WXYS1209/dsh-quota-cordis.git" },

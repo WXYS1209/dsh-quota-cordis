@@ -38,7 +38,7 @@ dsh plugin --profile desktop add /path/to/checkout
 | OpenAI API + 独立 Admin Key | 官方 UTC 本月/当日组织支出与 API Key 细分 | 已验证 |
 | 内置 `openai-codex` 订阅 | 主额度窗口（有报告时为五小时 / 周限） | 已验证 |
 | OpenCode Go（`opencode-go`） | Go 套餐额度窗口（有报告时为五小时 / 周 / 月度） | 预览：仅通过合成测试，待有 Go 额度的账户进行实时验证 |
-| MiniMax 中国 M Plan | 剩余额度 | 预览 |
+| MiniMax 中国 M Plan | 剩余额度 | 已验证（真实账户验收） |
 | 其他供应商与中转 | 仅显示状态和原因 | 不适用 |
 
 ## 配置说明

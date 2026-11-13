@@ -13,4 +13,4 @@ Please report security issues privately through GitHub's **Report a vulnerabilit
 
 ## Supported version
 
-The 0.7.0 release declares DSH `>=0.2.2-rc.1 <0.2.3` compatibility. The last baseline runtime integration verification was for v0.6.0 on Desktop `0.2.2-rc.1`. Please include the DSH and plugin versions in a report, but never attach credentials or raw authorization data.
+The 0.7.1 release declares DSH `>=0.2.2-rc.1 <0.2.3` compatibility. The last baseline runtime integration verification was for v0.6.0 on Desktop `0.2.2-rc.1`; MiniMax China M Plan quota reporting has since passed live-account acceptance. Please include the DSH and plugin versions in a report, but never attach credentials or raw authorization data.

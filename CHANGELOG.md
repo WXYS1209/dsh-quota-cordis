@@ -2,6 +2,11 @@
 
 All notable changes are documented here. Dates are UTC.
 
+## 0.7.1 — 2026-11-13
+
+- Mark MiniMax China M Plan remaining quota as verified after live-account acceptance.
+- Refresh the published security policy wording and DSH compatibility note.
+
 ## 0.7.0 — 2026-11-13
 
 - Added read-only MiniMax China M Plan quota through the official `/v1/token_plan/remains` endpoint; recognizes DSH's built-in `minimax-cn` default `https://api.minimaxi.com/anthropic` as well as `api.minimax.cn`; only reported remaining percentages are normalized, and ambiguous count fields are ignored.

@@ -38,7 +38,7 @@ Discovery is generic: every provider configured in DeepSeek Harness is listed, a
 | OpenAI API + separate Admin key | Authoritative UTC month-to-date/today organization spend and API-key breakdown | Yes |
 | Built-in `openai-codex` subscription | Main rate-limit windows (5-hour / weekly when reported) | Yes |
 | OpenCode Go (`opencode-go`) | Go subscription windows (5-hour / weekly / monthly when reported) | Preview — synthetic tests only; live verification pending a Go-enabled account |
-| MiniMax M Plan — China | Remaining quota | Preview |
+| MiniMax M Plan — China | Remaining quota | Yes — live account verified |
 | Other providers and relays | Status and reason only | Not applicable |
 
 ## Configuration notes
