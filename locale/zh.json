@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "供应商额度",
-    "description": "查看已配置供应商的余额、订阅额度与 API 支出；凭据仅在 Host 使用。"
+    "description": "查询已配置供应商的余额和订阅额度；凭据仅由本机 Host 用于查询，不会出现在返回数据中。OpenAI 组织支出需另配组织级 Admin Key（普通推理 Key 无法查询）；Admin Key 设置仅在配置官方 OpenAI API 路由后显示。"
   }
 }

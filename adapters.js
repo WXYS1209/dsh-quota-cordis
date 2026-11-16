@@ -2,6 +2,7 @@
 // Shape references:
 // MiniMax M Plan endpoint and windows: https://platform.minimax.cn/docs/m-plan/faq.md
 // https://api-docs.deepseek.com/api/get-user-balance/
+// https://docs.z.ai/devpack/extension/usage-query-plugin
 // https://github.com/zai-org/zai-coding-plugins/blob/main/plugins/glm-plan-usage/skills/usage-query-skill/scripts/query-usage.mjs
 // https://github.com/steipete/CodexBar/blob/main/docs/zai.md
 // https://github.com/steipete/CodexBar/blob/main/Sources/CodexBarCore/Resources/Plugins/zai.js
@@ -9,16 +10,16 @@
 const DASHBOARDS = Object.freeze({
   deepseek: 'https://platform.deepseek.com/usage',
   'glm-cn': 'https://bigmodel.cn/coding-plan/personal/usage',
-  'glm-global': 'https://z.ai/manage-apikey/coding-plan/personal/my-plan',
+  'zai-coding-plan': 'https://z.ai/manage-apikey/subscription',
   'minimax-cn': 'https://platform.minimax.cn/console/usage',
   'opencode-go': 'https://opencode.ai/console',
+  'zai-api': 'https://z.ai/manage-apikey/billing',
   openai: 'https://platform.openai.com/usage',
   codex: 'https://chatgpt.com/codex/cloud/settings/analytics#usage',
 });
 const HOSTS = Object.freeze({
   'api.deepseek.com': 'deepseek',
   'open.bigmodel.cn': 'glm-cn',
-  'api.z.ai': 'glm-global',
   'api.minimax.cn': 'minimax-cn',
   'api.minimaxi.com': 'minimax-cn',
   'api.openai.com': 'openai',
@@ -27,7 +28,7 @@ const ROUTES = Object.freeze({
   deepseek: 'deepseek',
   'deepseek-official': 'deepseek',
   openai: 'openai',
-  zai: 'glm-global',
+  zai: 'zai-coding-plan',
   'zai-coding-cn': 'glm-cn',
   'minimax-cn': 'minimax-cn',
   'opencode-go': 'opencode-go',
@@ -57,6 +58,13 @@ export function classifyProvider({ provider, baseURL } = {}) {
     try {
       const url = new URL(baseURL);
       if (url.protocol === 'https:' && !url.username && !url.password && !url.port) {
+        // The DSH built-in `zai` provider is its Global Coding Plan route. Use that
+        // exact provider identity for the plan monitor; arbitrary/custom Z.AI routes
+        // remain non-querying because Standard API keys have no published billing API.
+        if (url.hostname === 'api.z.ai') {
+          if (provider === 'zai') kind = 'zai-coding-plan';
+          else return { kind: 'unsupported', dashboardUrl: DASHBOARDS['zai-api'], reason: 'zai-api-status-only' };
+        }
         if (url.hostname === 'opencode.ai') {
           if (/^\/zen\/go\/v1\/?$/.test(url.pathname) && !url.search && !url.hash) kind = 'opencode-go';
         } else if (own(HOSTS, url.hostname)) {

@@ -29,25 +29,24 @@ dsh plugin --profile desktop add /path/to/checkout
 
 发现是通用的：DeepSeek Harness 中配置的每个供应商都会列出，不支持的会说明原因，而不是显示伪造的数字。额度查询按供应商逐一适配；**仅标记为“已验证”的行经过端到端验证；“预览”行尚未完成端到端验证；其他行仅供参考。**
 
-| 供应商 | 展示内容 | 验证情况 |
+| 供应商名称 | 展示内容 | 验证情况 |
 |---|---|---|
-| DeepSeek（官方 API Key） | 可用 / 充值 / 赠送余额 | 已验证 |
-| DeepSeek 账户（App 内登录） | 充值与赠送钱包，分开列示 | 已验证 |
-| GLM Coding Plan 国内（`open.bigmodel.cn`） | 订阅额度窗口（旧 Token、积分、MCP 形态） | 已验证 |
-| GLM Coding Plan 国际（`api.z.ai`） | 同样的窗口模型 | 预览：仅通过合成测试，待真实账户验证 |
-| OpenAI API + 独立 Admin Key | 官方 UTC 本月/当日组织支出与 API Key 细分 | 已验证 |
-| 内置 `openai-codex` 订阅 | 主额度窗口（有报告时为五小时 / 周限） | 已验证 |
+| DeepSeek 官方 API（`deepseek`、`deepseek-official`） | 可用 / 充值 / 赠送余额 | 已验证 |
+| DeepSeek 账户（`deepseek-account`；App 内登录） | 充值与赠送钱包，分开列示 | 已验证 |
+| GLM Coding Plan 国内（`zai-coding-cn`） | 订阅额度窗口（旧 Token、积分、MCP 形态） | 已验证 |
+| GLM Coding Plan 国际版（`zai`） | 通过 Z.AI 官方监控接口查询订阅额度窗口 | 预览：沿用官方用量查询插件的端点与响应结构，待真实国际版账户验证 |
+| Z.AI Standard API / 自定义路由（自定义供应商代码） | 官方公开 API 未提供账户余额 / 资源包剩余量 / 支出查询接口；提供账单控制台链接 | 仅控制台 |
+| OpenAI API + 独立 Admin Key（`openai`） | 最近 1/7/30 个完整 UTC 日的组织支出（不含当天）及对应时间范围的 API Key 细分 | 已验证 |
+| OpenAI Codex 订阅（`openai-codex`） | 主额度窗口（有报告时为五小时 / 周限） | 已验证 |
 | OpenCode Go（`opencode-go`） | Go 套餐额度窗口（有报告时为五小时 / 周 / 月度） | 预览：仅通过合成测试，待有 Go 额度的账户进行实时验证 |
-| MiniMax 中国 M Plan | 剩余额度 | 已验证（真实账户验收） |
+| MiniMax 中国 M Plan（`minimax-cn`） | 剩余额度 | 已验证（真实账户验收） |
 | 其他供应商与中转 | 仅显示状态和原因 | 不适用 |
 
 ## 配置说明
 
-- **OpenAI Admin Key**——仅用于组织级 Costs 查询与可选的 API Key 名称查询。通过 Harness 凭据服务保存，优先于任何本机文件；插件不读取 `~/.env.local`，也不使用模型推理 Key。
+- **OpenAI Admin Key**——仅用于组织级 Costs 查询与可选的 API Key 名称查询。通过 Harness 凭据服务保存，仅用于这些 OpenAI 查询；不会使用模型推理 Key。
 - **颜色阈值**——通过 `configEditor` 保存到 profile；“恢复默认”只修改草稿，点击保存才生效。
-- OpenAI 支出卡片以官方 Costs API 为整个组织的 UTC 当月累计与每日支出权威来源。API Key 细分优先显示 Admin 接口允许查询到的 Key 名称；不可用时回退显示 ID。账单数据可能滞后于控制台，且不是剩余余额。
-- OpenCode 额度仅适用于 OpenCode Go 套餐和 `opencode-go` 路由；不会把通用 OpenCode Zen 路由当作 Go 订阅查询。
-- MiniMax 额度使用官方中国 M Plan 接口 `https://www.minimax.cn/v1/token_plan/remains`，把当前供应商密钥作为 Bearer Token 发送（见[官方 FAQ](https://platform.minimax.cn/docs/m-plan/faq.md)）。此功能针对订阅 Key；普通 API Key 与 M Plan 订阅 Key 不通用，且本插件不会查询未有官方文档的按量付费余额接口。只解析服务端报告的剩余百分比；图片/视频条目依据 FAQ 仅展示周窗口，不根据含义有歧义的 `*_usage_count` 字段推算百分比。尚待真实账户验证。
+- OpenAI 支出卡片显示整个组织最近 1/7/30 个完整 UTC 自然日的支出，截止昨天且不含当天；API Key 细分与所选时间范围一致。Admin 接口允许查询名称时优先显示 Key 名称，否则回退显示 ID。Costs 数据可能延迟或回填，完整日的统计仍可能变化；这不是余额。
 
 ## 隐私与安全
 
@@ -65,7 +64,7 @@ dsh plugin --profile desktop add /path/to/checkout
 
 ```sh
 npm run check   # 全部模块语法检查
-npm test        # 162 项测试：解析器、Host 集成、安全边界
+npm test        # 168 项测试：解析器、Host 集成、安全边界
 ```
 
 ## 发布

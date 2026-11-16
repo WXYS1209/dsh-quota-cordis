@@ -10,7 +10,7 @@ import { DEFAULT_COLOR_THRESHOLDS, validateColorThresholds } from './quota-setti
 const ENDPOINTS = Object.freeze({
   deepseek: 'https://api.deepseek.com/user/balance',
   'glm-cn': 'https://open.bigmodel.cn/api/monitor/usage/quota/limit',
-  'glm-global': 'https://api.z.ai/api/monitor/usage/quota/limit',
+  'zai-coding-plan': 'https://api.z.ai/api/monitor/usage/quota/limit',
   'minimax-cn': 'https://www.minimax.cn/v1/token_plan/remains',
 });
 const TTL = 120_000;
@@ -43,6 +43,8 @@ export async function readJson(url, key, { fetcher = fetch, signal } = {}) {
   const combined = AbortSignal.any([AbortSignal.timeout(12_000), ...(signal ? [signal] : [])]);
   let response;
   try {
+    // DeepSeek and MiniMax require Bearer; GLM monitors (including the official
+    // Z.AI Coding Plan usage plugin) expect the configured key as a raw token.
     const bearerAuth = url === ENDPOINTS.deepseek || url === ENDPOINTS['minimax-cn'];
     response = await fetcher(url, {
       method: 'GET', redirect: 'error', signal: combined,
@@ -195,7 +197,7 @@ export class QuotaManager {
     return rows;
   }
   async readRow(row, refresh) {
-    const base = { id: row.id, name: row.name, kind: row.kind, ...(row.dashboardUrl ? { dashboardUrl: row.dashboardUrl } : {}), metrics: [] };
+    const base = { id: row.id, name: row.name, kind: row.kind, ...(row.dashboardUrl ? { dashboardUrl: row.dashboardUrl } : {}), ...(row.reason ? { reason: row.reason } : {}), metrics: [] };
     if (row.blocked && row.kind !== 'openai') return { ...base, status: row.blocked, source: 'none' };
     if (row.kind === 'unsupported') return { ...base, status: 'unsupported', source: 'none' };
     let identity;
@@ -236,7 +238,7 @@ export class QuotaManager {
     const existing = this.inflight.get(identity);
     if (existing) return { ...base, ...await existing };
     const operation = (async () => {
-      const source = row.kind === 'account' ? 'harness-account' : row.kind === 'codex' ? 'codex-usage' : row.kind === 'openai' ? 'official-costs' : row.kind === 'opencode-go' ? 'opencode-usage' : row.kind === 'minimax-cn' ? 'minimax-plan' : row.kind === 'deepseek' ? 'official-balance' : 'provider-monitor';
+      const source = row.kind === 'account' ? 'harness-account' : row.kind === 'codex' ? 'codex-usage' : row.kind === 'openai' ? 'official-costs' : row.kind === 'opencode-go' ? 'opencode-usage' : row.kind === 'minimax-cn' ? 'minimax-plan' : row.kind === 'zai-coding-plan' ? 'zai-plan-usage' : row.kind === 'deepseek' ? 'official-balance' : 'provider-monitor';
       try {
         let metrics;
         if (row.kind === 'codex') {
@@ -246,17 +248,25 @@ export class QuotaManager {
           if (afterIdentity !== identity) throw failure('account-changed');
         } else if (row.kind === 'openai') {
           metrics = await queryOpenAICosts({ key, fetcher: this.fetcher, now: this.now(), signal: this.controller.signal, groupByApiKey: true });
-          const keys = metrics.flatMap(metric => metric.breakdown ?? []).filter(entry => entry.apiKeyId && entry.projectId);
+          const keys = metrics.flatMap(metric => [
+            ...(metric.breakdown ?? []),
+            ...Object.values(metric.ranges ?? {}).flatMap(range => range.breakdown ?? []),
+          ]).filter(entry => entry.apiKeyId && entry.projectId);
           let names = new Map();
           try { names = await queryOpenAIKeyNames({ key, entries: keys, fetcher: this.fetcher, signal: this.controller.signal }); } catch { /* Name enrichment is optional; preserve Costs results. */ }
-          metrics = metrics.map(metric => metric.breakdown ? {
+          const enrichBreakdown = entries => entries.map(entry => {
+            const { projectId, ...safe } = entry;
+            const apiKeyName = entry.apiKeyId && projectId ? names.get(`${projectId}\u0000${entry.apiKeyId}`) : undefined;
+            return { ...safe, ...(apiKeyName ? { apiKeyName } : {}) };
+          });
+          metrics = metrics.map(metric => ({
             ...metric,
-            breakdown: metric.breakdown.map(entry => {
-              const { projectId, ...safe } = entry;
-              const apiKeyName = entry.apiKeyId && projectId ? names.get(`${projectId}\u0000${entry.apiKeyId}`) : undefined;
-              return { ...safe, ...(apiKeyName ? { apiKeyName } : {}) };
-            }),
-          } : metric);
+            ...(metric.breakdown ? { breakdown: enrichBreakdown(metric.breakdown) } : {}),
+            ...(metric.ranges ? { ranges: Object.fromEntries(Object.entries(metric.ranges).map(([name, range]) => [name, {
+              ...range,
+              ...(range.breakdown ? { breakdown: enrichBreakdown(range.breakdown) } : {}),
+            }])) } : {}),
+          }));
         } else if (row.kind === 'opencode-go') {
           metrics = await queryOpenCodeUsage({ key, fetcher: this.fetcher, now: this.now(), signal: this.controller.signal });
         } else if (row.kind === 'account') {
@@ -318,6 +328,6 @@ export class QuotaManager {
     }));
     for (const [id, item] of this.cache) if (this.now() - item.touchedAt > 3_600_000) this.cache.delete(id);
     const defaultProvider = this.services.agentDefaultModel?.currentSelection()?.provider;
-    return { rows, checkedAt: this.now(), refreshAfterMs: TTL, pluginVersion: '0.7.0', colorThresholds: validateColorThresholds(this.colorThresholdsProvider()), ...(defaultProvider ? { defaultProvider } : {}) };
+    return { rows, checkedAt: this.now(), refreshAfterMs: TTL, pluginVersion: '0.7.2', colorThresholds: validateColorThresholds(this.colorThresholdsProvider()), ...(defaultProvider ? { defaultProvider } : {}) };
   }
 }

@@ -224,19 +224,59 @@ test('native Base URL overrides cannot accidentally send a relay key to official
   } finally { await f.manager.dispose(); }
 });
 
-test('GLM domestic and global keys stay on their own fixed hosts with official-plugin auth', async () => {
+test('GLM Coding Plan China uses its fixed official monitor host', async () => {
   const f = fixture({ providers: {
     'zai-coding-cn': { baseURL: 'https://open.bigmodel.cn/api/coding/paas/v4', apiKeyEnv: 'CN_KEY' },
-    zai: { baseURL: 'https://api.z.ai/api/coding/paas/v4', apiKeyEnv: 'GLOBAL_KEY' },
-  }, keys: { CN_KEY: 'cn-secret', GLOBAL_KEY: 'global-secret' } });
+  }, keys: { CN_KEY: 'cn-secret' } });
   f.state.response = { code: 200, data: { limits: [{ type: 'CREDIT_LIMIT', percentage: 40, usage: 2000, currentValue: 800, unit: 3, number: 5 }] } };
   try {
     const result = await f.manager.snapshot();
+    assert.equal(result.rows[0].kind, 'glm-cn');
     assert.equal(result.rows[0].metrics[0].usedPercent, 40);
-    const requests = new Map(f.state.requests.map(request => [new URL(request.url).hostname, request.options.headers.Authorization]));
-    assert.equal(requests.get('open.bigmodel.cn'), 'cn-secret');
-    assert.equal(requests.get('api.z.ai'), 'global-secret');
+    assert.equal(f.state.requests.length, 1);
+    assert.equal(f.state.requests[0].url, 'https://open.bigmodel.cn/api/monitor/usage/quota/limit');
+    assert.equal(f.state.requests[0].options.headers.Authorization, 'cn-secret');
   } finally { await f.manager.dispose(); }
+});
+
+test('DSH built-in Z.AI Coding Plan queries the official global quota monitor with raw key auth', async () => {
+  for (const baseURL of [undefined, 'https://api.z.ai/api/paas/v4', 'https://api.z.ai/api/coding/paas/v4', 'https://api.z.ai/api/anthropic']) {
+    const f = fixture({ providers: {
+      zai: { baseURL, apiKeyEnv: 'ZAI_API_KEY' },
+    }, keys: { ZAI_API_KEY: 'zai-plan-secret' } });
+    f.state.response = { code: 200, data: { limits: [
+      { type: 'TOKENS_LIMIT', unit: 3, number: 5, percentage: 20 },
+      { type: 'TIME_LIMIT', unit: 5, number: 1, percentage: 30, usage: 100, currentValue: 30 },
+    ] } };
+    try {
+      const result = await f.manager.snapshot();
+      assert.equal(result.rows[0].kind, 'zai-coding-plan');
+      assert.equal(result.rows[0].status, 'ok');
+      assert.equal(result.rows[0].source, 'zai-plan-usage');
+      assert.equal(result.rows[0].dashboardUrl, 'https://z.ai/manage-apikey/subscription');
+      assert.deepEqual(result.rows[0].metrics.map(metric => metric.label), ['rolling', 'mcp']);
+      assert.equal(f.state.requests.length, 1);
+      assert.equal(f.state.requests[0].url, 'https://api.z.ai/api/monitor/usage/quota/limit');
+      assert.equal(f.state.requests[0].options.headers.Authorization, 'zai-plan-secret');
+      assert.equal(JSON.stringify(result).includes('zai-plan-secret'), false);
+    } finally { await f.manager.dispose(); }
+  }
+});
+
+test('custom Z.AI Standard API routes remain non-querying and link to billing', async () => {
+  for (const baseURL of ['https://api.z.ai/api/paas/v4', 'https://api.z.ai/api/coding/paas/v4', 'https://api.z.ai/custom/v1']) {
+    const f = fixture({ providers: {
+      'zai-custom': { baseURL, apiKeyEnv: 'ZAI_API_KEY' },
+    }, keys: { ZAI_API_KEY: 'zai-standard-secret' } });
+    try {
+      const result = await f.manager.snapshot();
+      assert.equal(result.rows[0].kind, 'unsupported');
+      assert.equal(result.rows[0].status, 'unsupported');
+      assert.equal(result.rows[0].reason, 'zai-api-status-only');
+      assert.equal(result.rows[0].dashboardUrl, 'https://z.ai/manage-apikey/billing');
+      assert.equal(f.state.requests.length, 0);
+    } finally { await f.manager.dispose(); }
+  }
 });
 
 test('simultaneous consumers share a single in-flight account query', async () => {

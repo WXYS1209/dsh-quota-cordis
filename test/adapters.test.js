@@ -9,29 +9,38 @@ const fails = fn => assert.throws(fn, { message: 'invalid-response' });
 test('only explicit known official routes are recognized without a URL', () => {
   for (const [provider, kind] of Object.entries({
     deepseek: 'deepseek', 'deepseek-official': 'deepseek', openai: 'openai',
-    zai: 'glm-global', 'zai-coding-cn': 'glm-cn', 'minimax-cn': 'minimax-cn', 'opencode-go': 'opencode-go',
+    zai: 'zai-coding-plan', 'zai-coding-cn': 'glm-cn', 'minimax-cn': 'minimax-cn', 'opencode-go': 'opencode-go',
   })) {
     const result = classifyProvider({ provider });
     assert.equal(result.kind, kind);
     assert.ok(result.dashboardUrl.startsWith('https://'));
   }
-  for (const provider of ['glm', 'zhipu', 'OpenAI', 'my-openai', 'deepseek-account', '__proto__', 'constructor', 'opencode', undefined]) {
+  for (const provider of ['glm', 'zhipu', 'OpenAI', 'my-openai', 'deepseek-account', 'zai-standard', '__proto__', 'constructor', 'opencode', undefined]) {
     assert.deepEqual(classifyProvider({ provider }), { kind: 'unsupported', dashboardUrl: null });
   }
+  assert.deepEqual(classifyProvider({ provider: 'zai' }), { kind: 'zai-coding-plan', dashboardUrl: 'https://z.ai/manage-apikey/subscription' });
 });
 
 test('official HTTPS endpoint determines provider even for custom route names', () => {
   for (const [baseURL, kind] of [
     ['https://api.deepseek.com/v1', 'deepseek'],
     ['https://open.bigmodel.cn/api/coding/paas/v4', 'glm-cn'],
-    ['https://api.z.ai/api/anthropic', 'glm-global'],
     ['https://api.openai.com:443/v1', 'openai'],
     ['https://api.minimax.cn/v1', 'minimax-cn'],
     ['https://api.minimax.cn/anthropic', 'minimax-cn'],
     ['https://api.minimaxi.com/anthropic', 'minimax-cn'],
 
   ]) assert.equal(classifyProvider({ provider: 'custom', baseURL }).kind, kind);
-  assert.equal(classifyProvider({ provider: 'openai', baseURL: 'https://api.z.ai/api/coding/paas/v4' }).kind, 'glm-global');
+  for (const baseURL of [
+    'https://api.z.ai/api/paas/v4',
+    'https://api.z.ai/api/coding/paas/v4',
+    'https://api.z.ai/api/anthropic',
+  ]) assert.deepEqual(classifyProvider({ provider: 'zai', baseURL }), { kind: 'zai-coding-plan', dashboardUrl: 'https://z.ai/manage-apikey/subscription' });
+  for (const [provider, baseURL] of [
+    ['custom', 'https://api.z.ai/api/coding/paas/v4'],
+    ['custom', 'https://api.z.ai/custom/v1'],
+  ]) assert.deepEqual(classifyProvider({ provider, baseURL }), { kind: 'unsupported', dashboardUrl: 'https://z.ai/manage-apikey/billing', reason: 'zai-api-status-only' });
+  assert.deepEqual(classifyProvider({ provider: 'zai', baseURL: 'https://relay.example/v1' }), { kind: 'unsupported', dashboardUrl: null });
   assert.equal(classifyProvider({ provider: 'custom', baseURL: 'https://opencode.ai/zen/go/v1' }).kind, 'opencode-go');
   assert.equal(classifyProvider({ provider: 'custom', baseURL: 'https://opencode.ai/zen/v1' }).kind, 'unsupported');
   assert.equal(classifyProvider({ provider: 'opencode-go', baseURL: 'https://opencode.ai/zen/go/v1?next=https://evil.example' }).kind, 'unsupported');

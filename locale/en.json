@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Provider quota",
-    "description": "Balances, subscription quotas and API spend for configured providers. Credentials stay on the Host."
+    "description": "Checks balances and subscription quotas for configured providers; credentials are used by the local Host only and never included in results. OpenAI organization spend requires a separate organization Admin key (an inference key cannot query it); the Admin-key setting appears only when an official OpenAI API route is configured."
   }
 }

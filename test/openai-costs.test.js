@@ -6,7 +6,8 @@ const KEY = 'synthetic-admin-key-only';
 const NOW = Date.UTC(2026, 10, 5, 9, 30, 45, 123);
 const START = Date.UTC(2026, 10, 1);
 const DAY_MS = 86_400_000;
-const WEEK_START = Math.floor(NOW / DAY_MS) * DAY_MS - 6 * DAY_MS;
+const TODAY = Math.floor(NOW / DAY_MS) * DAY_MS;
+const HISTORY_START = TODAY - 30 * DAY_MS;
 const result = (value, currency = 'usd', extra = {}) => ({ object: 'organization.costs.result', amount: { value, currency }, ...extra });
 const bucket = (results = [], day = 1) => ({ object: 'bucket', start_time: START / 1000 + (day - 1) * 86400, end_time: START / 1000 + day * 86400, results });
 const page = (data = [], next_page = null) => ({ object: 'page', data, has_more: next_page !== null, next_page });
@@ -21,7 +22,7 @@ const rejects = async (promise, code = 'invalid-response') => assert.rejects(pro
   return true;
 });
 
-test('queries only the official organization Costs endpoint, UTC month, without filters', async () => {
+test('queries the official Costs endpoint for 30 complete UTC days and month-to-date', async () => {
   let calls = 0;
   const metrics = await queryOpenAICosts({ ...base, fetcher: async (address, options) => {
     calls++;
@@ -29,7 +30,7 @@ test('queries only the official organization Costs endpoint, UTC month, without 
     assert.equal(url.origin, 'https://api.openai.com');
     assert.equal(url.pathname, '/v1/organization/costs');
     assert.deepEqual(Object.fromEntries(url.searchParams), {
-      start_time: String(WEEK_START / 1000), end_time: String(Math.floor(NOW / 1000)), bucket_width: '1d', limit: '180',
+      start_time: String(HISTORY_START / 1000), end_time: String(Math.floor(NOW / 1000)), bucket_width: '1d', limit: '180',
     });
     assert.equal(options.method, 'GET');
     assert.equal(options.redirect, 'error');
@@ -38,10 +39,10 @@ test('queries only the official organization Costs endpoint, UTC month, without 
     return response(page([bucket([result(12.42)])]));
   } });
   assert.equal(calls, 1);
-  assert.deepEqual(metrics, [{ type: 'spend', amount: '12.42', currency: 'USD', periodStart: START, periodEnd: Math.floor(NOW / 1000) * 1000, timezone: 'UTC', scope: 'organization', daily: [
-    { date: WEEK_START, amount: '0' }, { date: WEEK_START + DAY_MS, amount: '0' }, { date: WEEK_START + 2 * DAY_MS, amount: '12.42' },
-    { date: WEEK_START + 3 * DAY_MS, amount: '0' }, { date: WEEK_START + 4 * DAY_MS, amount: '0' }, { date: WEEK_START + 5 * DAY_MS, amount: '0' }, { date: WEEK_START + 6 * DAY_MS, amount: '0' },
-  ] }]);
+  const daily = Array.from({ length: 30 }, (_, index) => ({ date: HISTORY_START + index * DAY_MS, amount: index === 26 ? '12.42' : '0', hasRecords: index === 26 }));
+  assert.deepEqual(metrics, [{ type: 'spend', amount: '12.42', currency: 'USD', periodStart: START, periodEnd: Math.floor(NOW / 1000) * 1000, timezone: 'UTC', scope: 'organization', daily,
+    ranges: { '1d': { amount: '0', noRecords: true }, '7d': { amount: '12.42' }, '30d': { amount: '12.42' } },
+  }]);
   assert.ok(!JSON.stringify(metrics).includes(KEY));
 });
 
@@ -117,39 +118,71 @@ test('group_by=api_key_id produces per-key breakdown; null key means organizatio
   const eur = metrics.find(metric => metric.currency === 'EUR');
   assert.equal(eur.amount, '0.75');
   assert.deepEqual(eur.breakdown, [{ apiKeyId: 'key_BBB', projectId: 'proj_BBB', currency: 'EUR', amount: '0.75' }]);
+  assert.equal(usd.ranges['30d'].amount, '7');
+  assert.deepEqual(usd.ranges['30d'].breakdown, usd.breakdown);
+  assert.equal(eur.ranges['30d'].amount, '0.75');
+  assert.deepEqual(eur.ranges['30d'].breakdown, eur.breakdown);
   assert.ok(!JSON.stringify(metrics).includes(KEY));
 });
 
-test('daily history is seven UTC days, zero-fills, and excludes pre-month days from MTD total', async () => {
+test('each complete-day range aggregates only its dates and matching API-key groups', async () => {
+  const bucketAt = (date, apiKeyId, projectId, value) => ({ object: 'bucket', start_time: date / 1000, end_time: date / 1000 + 86400, results: [
+    { object: 'organization.costs.result', amount: { currency: 'usd', value }, api_key_id: apiKeyId, project_id: projectId },
+  ] });
+  const metrics = await queryOpenAICosts({ ...base, groupByApiKey: true, fetcher: async () => response(page([
+    bucketAt(HISTORY_START, 'key_Old', 'proj_Old', 4),
+    bucketAt(START - DAY_MS, 'key_Week', 'proj_Week', 2),
+    bucketAt(TODAY - DAY_MS, 'key_Yesterday', 'proj_Yesterday', 0.1),
+  ])) });
+  const usd = metrics.find(metric => metric.currency === 'USD');
+  assert.equal(usd.ranges['1d'].amount, '0.1');
+  assert.deepEqual(usd.ranges['1d'].breakdown, [
+    { apiKeyId: 'key_Yesterday', projectId: 'proj_Yesterday', currency: 'USD', amount: '0.1' },
+  ]);
+  assert.equal(usd.ranges['7d'].amount, '2.1');
+  assert.deepEqual(usd.ranges['7d'].breakdown.map(entry => [entry.apiKeyId, entry.amount]), [['key_Week', '2'], ['key_Yesterday', '0.1']]);
+  assert.equal(usd.ranges['30d'].amount, '6.1');
+  assert.deepEqual(usd.ranges['30d'].breakdown.map(entry => [entry.apiKeyId, entry.amount]), [['key_Old', '4'], ['key_Week', '2'], ['key_Yesterday', '0.1']]);
+  assert.equal(usd.breakdown.length, 1);
+  assert.equal(usd.breakdown[0].apiKeyId, 'key_Yesterday');
+});
+
+test('daily history covers 30 complete UTC days, excludes today, and keeps MTD separate', async () => {
   const bucketAt = (date, results) => ({ object: 'bucket', start_time: date / 1000, end_time: date / 1000 + 86400, results });
   let requestUrl;
   const metrics = await queryOpenAICosts({ ...base, fetcher: async address => {
     requestUrl = new URL(address);
     return response(page([
-      bucketAt(WEEK_START + DAY_MS, [result(7)]), // Oct 31, weekly only
+      bucketAt(START - DAY_MS, [result(7)]), // Oct 31, in the 7d window but before MTD.
       bucketAt(START, [result(1.25)]),
       bucketAt(START + 2 * DAY_MS, [result(2)]),
-      bucketAt(START + 3 * DAY_MS, [result(0.5, 'eur')]),
+      bucketAt(START + 3 * DAY_MS, [result(0.5, 'eur')]), // Yesterday.
+      bucketAt(TODAY, [result(99)]), // Partial current day stays out of selectable ranges.
     ]));
   } });
-  assert.equal(requestUrl.searchParams.get('start_time'), String(WEEK_START / 1000));
+  assert.equal(requestUrl.searchParams.get('start_time'), String(HISTORY_START / 1000));
   const usd = metrics.find(metric => metric.currency === 'USD');
-  assert.equal(usd.amount, '3.25');
-  assert.deepEqual(usd.daily, [
-    { date: WEEK_START, amount: '0' }, { date: WEEK_START + DAY_MS, amount: '7' },
-    { date: START, amount: '1.25' }, { date: START + DAY_MS, amount: '0' },
-    { date: START + 2 * DAY_MS, amount: '2' }, { date: START + 3 * DAY_MS, amount: '0' },
-    { date: START + 4 * DAY_MS, amount: '0' },
-  ]);
+  assert.equal(usd.amount, '102.25');
+  assert.equal(usd.daily.length, 30);
+  assert.deepEqual(usd.daily[25], { date: START - DAY_MS, amount: '7', hasRecords: true });
+  assert.deepEqual(usd.daily[26], { date: START, amount: '1.25', hasRecords: true });
+  assert.equal(usd.daily.at(-1).date, TODAY - DAY_MS);
+  assert.equal(usd.daily.at(-1).amount, '0');
+  assert.equal(usd.ranges['1d'].amount, '0');
+  assert.equal(usd.ranges['1d'].noRecords, true);
+  assert.equal(usd.ranges['7d'].amount, '10.25');
+  assert.equal(usd.ranges['30d'].amount, '10.25');
+  assert.equal(usd.ranges['30d'].amount.includes('99'), false);
   const eur = metrics.find(metric => metric.currency === 'EUR');
   assert.equal(eur.amount, '0.5');
-  assert.equal(eur.daily[5].amount, '0.5');
+  assert.equal(eur.daily.at(-1).amount, '0.5');
+  assert.equal(eur.ranges['1d'].amount, '0.5');
 });
 
-test('noRecords is tracked per currency across recent history and MTD', async () => {
+test('range noRecords is tracked per currency independently of MTD', async () => {
   const bucketAt = (date, results) => ({ object: 'bucket', start_time: date / 1000, end_time: date / 1000 + 86400, results });
   const metrics = await queryOpenAICosts({ ...base, fetcher: async () => response(page([
-    bucketAt(WEEK_START, [result(3, 'eur')]), // Recent history only; no October MTD record.
+    bucketAt(HISTORY_START, [result(3, 'eur')]), // 30d history only; no MTD record.
     bucketAt(START, [result(2, 'usd')]),
   ])) });
   const eur = metrics.find(metric => metric.currency === 'EUR');
@@ -157,8 +190,11 @@ test('noRecords is tracked per currency across recent history and MTD', async ()
   assert.equal(eur.amount, '0');
   assert.equal(eur.noRecords, true);
   assert.equal(eur.daily[0].amount, '3');
+  assert.equal(eur.ranges['30d'].amount, '3');
+  assert.equal(eur.ranges['30d'].noRecords, undefined);
   assert.equal(usd.amount, '2');
   assert.equal(usd.noRecords, undefined);
+  assert.equal(usd.ranges['30d'].amount, '2');
 });
 
 test('without groupByApiKey no breakdown is emitted and no group parameter is sent', async () => {
@@ -188,10 +224,10 @@ test('UTC month boundaries never depend on local timezone and end milliseconds a
   }
 });
 
-test('month-start MTD interval stays empty while the weekly query remains nonzero-length', async () => {
+test('month-start MTD interval stays empty while the 30-day query remains nonzero-length', async () => {
   let calls = 0;
   const monthStart = Date.UTC(2026, 10, 1);
-  const expectedHistoryStart = monthStart - 6 * DAY_MS;
+  const expectedHistoryStart = monthStart - 30 * DAY_MS;
   for (const now of [monthStart, monthStart + 1, monthStart + 999]) {
     const metrics = await queryOpenAICosts({ ...base, now, fetcher: async address => {
       calls++;
@@ -205,7 +241,10 @@ test('month-start MTD interval stays empty while the weekly query remains nonzer
     assert.equal(metrics[0].periodStart, monthStart);
     assert.equal(metrics[0].periodEnd, monthStart);
     assert.equal(metrics[0].noRecords, true);
-    assert.deepEqual(metrics[0].daily.map(point => point.amount), Array(7).fill('0'));
+    assert.equal(metrics[0].daily.length, 30);
+    assert.deepEqual(metrics[0].daily.map(point => point.amount), Array(30).fill('0'));
+    assert.deepEqual(Object.keys(metrics[0].ranges), ['1d', '7d', '30d']);
+    assert.ok(Object.values(metrics[0].ranges).every(range => range.noRecords === true));
   }
   assert.equal(calls, 3);
   const controller = new AbortController(); controller.abort();
@@ -217,7 +256,7 @@ test('first second after month-start requests aligned MTD and weekly boundaries'
   const monthStart = Date.UTC(2026, 10, 1);
   let requestUrl;
   const metrics = await queryOpenAICosts({ ...base, now: monthStart + 1000, fetcher: async address => { requestUrl = new URL(address); return response(page()); } });
-  assert.equal(requestUrl.searchParams.get('start_time'), String((monthStart - 6 * DAY_MS) / 1000));
+  assert.equal(requestUrl.searchParams.get('start_time'), String((monthStart - 30 * DAY_MS) / 1000));
   assert.equal(requestUrl.searchParams.get('end_time'), String(monthStart / 1000 + 1));
   assert.equal(metrics[0].periodEnd, monthStart + 1000);
 });

@@ -2,6 +2,15 @@
 
 All notable changes are documented here. Dates are UTC.
 
+## 0.7.2 — 2026-11-16
+
+- Add Global Z.AI GLM Coding Plan quota lookup for DSH's built-in `zai` provider, using the official `api.z.ai/api/monitor/usage/quota/limit` endpoint and raw-key authorization.
+- Keep Standard API and custom Z.AI routes non-querying; Coding Plan monitor data is subscription quota, not cash balance or account spend.
+- Link the built-in route to the official subscription usage page; note that live global-account and non-Personal tier behavior remain unverified.
+- Add regression coverage for provider identity, endpoint/auth, normalized quota response, and Standard/custom-route isolation.
+- Add selectable OpenAI organization spend ranges for the last 1, 7, or 30 complete UTC days (excluding today; 1d is yesterday), with matching API-key breakdowns and a bordered no-record state.
+- Preserve month-to-date organization totals for the agent query and document that completed-day Costs data can lag or be backfilled.
+
 ## 0.7.1 — 2026-11-13
 
 - Mark MiniMax China M Plan remaining quota as verified after live-account acceptance.

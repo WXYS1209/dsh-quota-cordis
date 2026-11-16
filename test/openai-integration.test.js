@@ -49,8 +49,16 @@ test('configured official route shows separately authorized organization spend, 
     assert.equal(result.rows[0].metrics[0].type, 'spend');
     assert.equal(result.rows[0].metrics[0].scope, 'organization');
     assert.equal(result.rows[0].metrics[0].amount, '1.75');
-    assert.equal(result.rows[0].metrics[0].daily.length, 7);
+    assert.equal(result.rows[0].metrics[0].daily.length, 30);
+    assert.equal(result.rows[0].metrics[0].ranges['1d'].amount, '0');
+    assert.equal(result.rows[0].metrics[0].ranges['1d'].noRecords, true);
+    assert.equal(result.rows[0].metrics[0].ranges['7d'].amount, '1.75');
+    assert.equal(result.rows[0].metrics[0].ranges['30d'].amount, '1.75');
     assert.deepEqual(result.rows[0].metrics[0].breakdown, [
+      { apiKeyId: null, currency: 'USD', amount: '1.25' },
+      { apiKeyId: 'key_Example', currency: 'USD', amount: '0.5', apiKeyName: 'Example Name' },
+    ]);
+    assert.deepEqual(result.rows[0].metrics[0].ranges['30d'].breakdown, [
       { apiKeyId: null, currency: 'USD', amount: '1.25' },
       { apiKeyId: 'key_Example', currency: 'USD', amount: '0.5', apiKeyName: 'Example Name' },
     ]);
@@ -75,7 +83,7 @@ test('spend success cache lasts 15 minutes but key rotation and UTC month change
     assert.equal(state.calls, 6);
     state.now = Date.UTC(2026, 11, 1, 0, 1);
     await manager.snapshot();
-    assert.equal(state.calls, 7);
+    assert.equal(state.calls, 8);
   } finally { await manager.dispose(); }
 });
 

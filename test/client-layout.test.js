@@ -280,6 +280,25 @@ test('supplier quota page separates overview and threshold form into accessible 
   assert.equal(source.includes("ctx.slots.inject('settings.plugins.tab'"), false);
 });
 
+test('overview company filter groups known brands and filters rows within overview sections', () => {
+  const page = source.split('function Page()')[1].split('function PopupSurface')[0];
+  assert.ok(source.includes("case 'openai': case 'codex': return 'openai'"));
+  assert.ok(source.includes("case 'deepseek': case 'account': return 'deepseek'"));
+  assert.ok(source.includes("case 'glm-cn': case 'zai-coding-plan': return 'glm'"));
+  assert.ok(source.includes("if (row.reason === 'zai-api-status-only') return 'glm'"));
+  assert.ok(source.includes("default: return 'other'"));
+  assert.ok(page.includes("const [companyFilter, setCompanyFilter] = React.useState('all')"));
+  assert.ok(page.includes("className: 'pq-overview-filter'"));
+  assert.ok(page.includes("htmlFor: 'pq-company-filter'"));
+  assert.ok(page.includes("id: 'pq-company-filter', className: 'pq-company-select'"));
+  assert.ok(page.includes('const group = visibleRows.filter(filter)'));
+  assert.ok(page.includes("!['account', 'glm-cn', 'zai-coding-plan', 'codex', 'opencode-go', 'minimax-cn'].includes(row.kind)"));
+  assert.ok(page.includes("t('companyNoResults')"));
+  assert.ok(source.includes("companyFilter: '供应商公司'"));
+  assert.ok(source.includes("companyFilter: 'Provider company'"));
+  assert.ok(source.includes('.pq-company-select:focus-visible{outline:2px solid var(--dsw-alias-brand-primary)'));
+});
+
 test('OpenAI Admin Key lives in an explicit API extras tab only when an official OpenAI route exists', () => {
   const page = source.split('function Page()')[1].split('function PopupSurface')[0];
   const extra = source.split('function OpenAIExtraSettings({ routes })')[1].split('function Page()')[0];
@@ -300,23 +319,53 @@ test('OpenAI Admin Key lives in an explicit API extras tab only when an official
   assert.ok(!extra.includes("useState(data?.adminKey"));
 });
 
-test('monthly spend shows UTC today spend without a chart and keeps key-name breakdowns', async () => {
+test('Admin Key status distinguishes checking, missing and configured states and links to key settings', () => {
+  const extra = source.split('function OpenAIExtraSettings({ routes })')[1].split('function Page()')[0];
+  assert.ok(extra.includes('data || busy ? h(\'p\''));
+  assert.ok(extra.includes('pq-admin-key-configured'));
+  assert.ok(extra.includes("adminKeyConfigured ? { 'data-tone': 'success' } : {}"));
+  assert.ok(extra.includes("t(!data ? 'adminChecking' : adminKeyConfigured ? 'adminConfigured' : 'adminMissing')"));
+  assert.ok(source.includes('.pq-dot{width:6px;height:6px;border-radius:50%;flex:none;background:var(--dsw-alias-state-idle-primary)}'));
+  assert.ok(source.includes('.pq-admin-key-configured{color:var(--dsw-alias-state-success-primary)}'));
+  assert.ok(extra.includes("href: 'https://platform.openai.com/settings/organization/admin-keys'"));
+  assert.ok(extra.includes("target: '_blank', rel: 'noopener noreferrer'"));
+  assert.ok(source.includes("adminHowToGetKey: '在 OpenAI Platform 的 Organization → Settings → Admin keys 中创建（需组织所有者权限）：'"));
+  assert.ok(source.includes("adminHowToGetKey: 'Create one in OpenAI Platform → Organization → Settings → Admin keys (organization owner access required):'"));
+});
+
+test('OpenAI spend card selects complete UTC-day ranges and matching key breakdowns', async () => {
   const metric = source.split('function Metric({ metric, colorThresholds })')[1].split('function Row({ row')[0];
-  assert.ok(metric.includes('apiKeyBreakdown'));
+  assert.ok(metric.includes('React.useState(\'7d\')'));
+  assert.ok(metric.includes("['1d', '7d', '30d']"));
+  assert.ok(metric.includes('metric.ranges?.[range]'));
+  assert.ok(metric.includes('selected.breakdown'));
+  assert.ok(metric.includes("selected.noRecords ? h('div', { className: 'pq-breakdown-list' }"));
+  assert.ok(metric.includes("role: 'status'"));
+  assert.ok(source.includes('.pq-breakdown-list .pq-breakdown{margin-top:0;padding:8px 10px;border:1px solid'));
+  assert.ok(metric.includes("t('completeUtcDays')"));
+  assert.ok(metric.includes("t('spendRange')"));
+  assert.ok(metric.includes("t('rangeAnnouncement')"));
+  assert.ok(metric.includes("'aria-live': 'polite'"));
+  assert.ok(metric.includes("t('costsLag')"));
+  assert.ok(metric.includes("t('apiSpend')"));
+  assert.ok(source.includes('Costs data may lag or be backfilled'));
+  assert.ok(source.includes('数据可能延迟或回填'));
+  assert.ok(source.includes('不含当天；1d 为昨天。'));
+  assert.ok(!source.includes('不含今天'));
   assert.ok(metric.includes("entry.apiKeyName || (entry.apiKeyId ? `${t('apiKey')} ${entry.apiKeyId}` : t('apiKeyUnattributed'))"));
-  assert.ok(metric.includes('metric.daily'));
-  assert.ok(metric.includes('metric.daily.at(-1)'));
-  assert.ok(metric.includes("t('todaySpend')"));
-  assert.ok(metric.includes('todaySpend.date'));
+  assert.ok(!metric.includes('metric.daily'));
+  assert.ok(!metric.includes("t('todaySpend')"));
+  assert.ok(!metric.includes("t('period')"));
   assert.ok(!metric.includes('SpendTrend'));
   assert.ok(!source.includes('function SpendTrend'));
   assert.ok(!source.includes('pq-chart-'));
   assert.ok(metric.includes('role: \'list\''));
-  // The grouped request itself lives in the Host costs module.
+  // The grouped request and 30-day aggregation live in the Host costs module.
   const costs = await readFile(new URL('../openai-costs.js', import.meta.url), 'utf8');
   assert.ok(costs.includes("url.searchParams.append('group_by', 'api_key_id')"));
-  assert.ok(costs.includes("...(breakdown ? { breakdown: breakdown.filter(entry => entry.currency === currency) } : {})"));
+  assert.ok(costs.includes("ranges,\n      ...(monthRecords.get(currency) === undefined ? { noRecords: true } : {})"));
   assert.ok(costs.includes('apiKeyId: apiKeyId || null'));
+  assert.ok(costs.includes('historyStart = Math.max(0, historyEnd - 30 * dayMs)'));
 });
 
 test('main page, popup and dock use snapshot thresholds; palette stays fixed to theme tokens', () => {
@@ -333,8 +382,8 @@ test('main page, popup and dock use snapshot thresholds; palette stays fixed to 
 });
 
 test('Codex joins subscriptions with fixed grant-state guidance and never triggers login', () => {
-  assert.ok(source.includes("['subscription', row => ['glm-cn', 'glm-global', 'codex', 'opencode-go', 'minimax-cn'].includes(row.kind)]"));
-  assert.ok(source.includes("['api', row => !['account', 'glm-cn', 'glm-global', 'codex', 'opencode-go', 'minimax-cn'].includes(row.kind)]"));
+  assert.ok(source.includes("['subscription', row => ['glm-cn', 'zai-coding-plan', 'codex', 'opencode-go', 'minimax-cn'].includes(row.kind)]"));
+  assert.ok(source.includes("['api', row => !['account', 'glm-cn', 'zai-coding-plan', 'codex', 'opencode-go', 'minimax-cn'].includes(row.kind)]"));
   assert.ok(source.includes("opencode-go-only"));
   for (const key of ['codex-usage', 'codex-auth-required', 'codex-auth-expired']) assert.ok(source.includes(`'${key}':`));
   assert.ok(source.includes('本插件不会自动续期或发起推理'));
@@ -342,4 +391,17 @@ test('Codex joins subscriptions with fixed grant-state guidance and never trigge
   assert.equal(quotaTone({ status: 'codex-auth-expired', metrics: [] }), 'idle');
   assert.equal(source.includes('authorization.begin'), false);
   assert.equal(source.includes("action: 'start'"), false);
+});
+
+test('Z.AI Coding Plan is distinguished from Standard API billing rows', () => {
+  assert.ok(source.includes("if (row.reason === 'zai-api-status-only') return t('zai-api-status-only-short')"));
+  assert.ok(source.includes("['glm-cn', 'zai-coding-plan', 'codex', 'opencode-go', 'minimax-cn'].includes(row.kind)"));
+  assert.ok(source.includes("zaiPlan: 'GLM Coding · Global'"));
+  assert.ok(source.includes("'zai-api-status-only': 'This is a non-built-in Z.AI Standard API route."));
+  assert.ok(source.includes("'zai-api-status-only': '这是非内置 Z.AI Standard API 路由。"));
+  assert.ok(source.includes("t(row.reason === 'zai-api-status-only' ? 'zai-api-billing-dashboard' : row.kind === 'zai-coding-plan' ? 'zai-plan-dashboard' : 'dashboard')"));
+  assert.ok(source.includes("'zai-plan-dashboard': 'Plan usage'"));
+  assert.ok(source.includes("'zai-plan-dashboard': '套餐用量'"));
+  assert.ok(source.includes("'zai-api-billing-dashboard': 'Billing console'"));
+  assert.ok(source.includes("'zai-api-billing-dashboard': '账单控制台'"));
 });
