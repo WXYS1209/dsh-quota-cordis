@@ -1,76 +1,67 @@
 # Provider quota
 
-[中文说明](README.zh.md)
+[中文说明](<README.zh.md>) · [npm](https://www.npmjs.com/package/dsh-quota-cordis) · [MIT](<LICENSE>)
 
-Balances, subscription quotas and OpenAI API spend for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) Desktop. Native Host/Client plugin — no npm runtime dependencies, no install scripts.
-
-- npm: [`dsh-quota-cordis`](https://www.npmjs.com/package/dsh-quota-cordis)
-- MIT licensed
+Provider quotas, OpenAI spend and company-grouped model management for DeepSeek Harness Desktop. No npm runtime dependencies or install scripts.
 
 ## Install
 
+Version **0.7.3** supports DSH `>=0.2.2-rc.1 <0.2.3-0`. Recommended/source-audit baseline: **0.2.2-rc.5**; rc.1–rc.4 have not each been re-tested against all new features.
+
 ```sh
 dsh plugin --profile desktop add dsh-quota-cordis
-
-# or from a local checkout
+# or a local checkout
 dsh plugin --profile desktop add /path/to/checkout
 ```
 
-## What you get
+After updating plugin code, restart DSH and fully refresh the page. The form's **Reload** button refreshes data, not code.
 
-- **Settings → Provider quota** page with tabs:
-  - *Overview* — every configured provider, grouped into subscriptions, accounts and API spend.
-  - *Color settings* — remaining-quota thresholds for the fixed green/orange/red palette (defaults 50 / 25), persisted through the profile.
-  - *API extras* (shown when an official OpenAI API route is configured) — enter an OpenAI Admin key; it is stored in the DSH credential store, never in the profile, never echoed.
-- **Composer summary** — one fixed-height line under the input box for the current provider; click for a popup that opens upward without resizing the composer.
-- **Agent tool `provider_quota`** — the same credential-free normalized data the UI shows.
+## Features
+
+- **Institution quotas:** provider balances, subscription windows and OpenAI spend details.
+- **Model management:** company grouping/search, supported provider and model editing, model discovery and custom API routes; unsupported editors remain read-only.
+- **Color settings:** configurable remaining-quota thresholds.
+- **Composer summary:** compact current-provider status with an upward popup.
+- **Agent tools:** `provider_quota`, `quota_color_settings` and `provider_company_rules`.
 
 ## Provider support
 
-Discovery is generic: every provider configured in DeepSeek Harness is listed, and unsupported ones state why instead of showing a fake number. Quota queries are per-provider adapters; **only rows marked “Yes” are verified end to end. “Preview” rows are not yet verified end to end. Other rows are informational.**
+**Accepted** means historical live-account acceptance, not a new full rc.5 verification. Current SDK/source and synthetic tests are separate evidence. See [verification history](<CHANGELOG.md#060--2026-11-10>).
 
-| Provider name | Shown | Verified |
+| Provider | Display | Status |
 |---|---|---|
-| DeepSeek official API (`deepseek`, `deepseek-official`) | Available / recharge / granted balance | Yes |
-| DeepSeek account (`deepseek-account`; in-app sign-in) | Recharge and bonus wallets, listed separately | Yes |
-| GLM Coding Plan — China (`zai-coding-cn`) | Subscription windows (legacy token, credit, MCP shapes) | Yes |
-| GLM Coding Plan — Global (`zai`) | Subscription quota windows from the official Z.AI monitor | Preview — uses the official usage-query endpoint/schema; live account verification pending |
-| Z.AI Standard API / custom routes (custom provider IDs) | No documented API for account balance / bundle remaining / spend; official billing-console link | Console only |
-| OpenAI API + separate Admin key (`openai`) | Whole-organization spend for selectable 1d / 7d / 30d complete UTC-day windows (excluding today), with matching API-key breakdown | Yes |
-| OpenAI Codex subscription (`openai-codex`) | Main rate-limit windows (5-hour / weekly when reported) | Yes |
-| OpenCode Go (`opencode-go`) | Go subscription windows (5-hour / weekly / monthly when reported) | Preview — synthetic tests only; live verification pending a Go-enabled account |
-| MiniMax M Plan — China (`minimax-cn`) | Remaining quota | Yes — live account verified |
-| Other providers and relays | Status and reason only | Not applicable |
+| DeepSeek API | Available, recharge and granted balance | Accepted |
+| DeepSeek account | Separate recharge and bonus wallets | Accepted |
+| GLM Coding Plan — China | Subscription windows | Accepted |
+| GLM Coding Plan — Global | Subscription windows | Preview |
+| GLM Standard API — China | CNY balance and resource packages | Preview |
+| Z.AI Standard API — Global | Detection/status only | No balance query |
+| OpenAI API | Organization spend: UTC today, yesterday, 7d/30d; API-key breakdown | Accepted |
+| OpenAI Codex | Subscription windows and reported Credits | Windows accepted; Credits preview |
+| OpenCode Go | Reported 5-hour/weekly/monthly windows | Preview |
+| MiniMax China M Plan | Remaining quota | Accepted |
+| Other providers/relays | Status and reason | No quota adapter |
 
-## Configuration notes
+Preview features still need live-account validation. Missing data is not shown as zero; Credits are usage units, not an API cash balance.
 
-- **OpenAI Admin key** — used only for the organization Costs endpoint and optional API-key name lookup. It is stored through the Harness credential service and used only for these OpenAI queries; model inference keys are not used.
-- **Color thresholds** — saved via `configEditor` into the profile; restoring defaults only edits the draft until you save.
-- The OpenAI spend card shows whole-organization spend for selectable 1d / 7d / 30d windows of complete UTC calendar days, ending yesterday and excluding today. Its API-key breakdown follows the selected window and displays the configured key name where the Admin endpoint permits lookup, falling back to the ID if unavailable. Costs data can lag or be backfilled, so completed-day totals may change; this is not a balance.
+## Usage notes
 
-## Privacy and security
+- **OpenAI spend needs a separate organization Admin key**, not an inference key. Enter it in OpenAI details; cost data may arrive late or be revised.
+- Companies follow the actual Host-resolved endpoint. Saved user settings or configured authentication sort first, then localized names; unknown endpoints stay last. Merely enabling a default entry does not count. Edit expands inside its card; discovery uses a dialog and explicit selection. Final **Save** persists changes; editing does not switch the selected/default model.
+- **Codex login is built into this plugin using DSH native authorization; no extra OAuth UI plugin is required.** Login starts only on an explicit click and is safely unavailable if the native capability is missing. Existing native-grant quota/Credits queries remain independent of signing in here. The new login integration has source/synthetic coverage, not a new live-account OAuth acceptance.
 
-- Credentials are resolved and used by the local Host only; normalized results never contain them.
-- Quota requests go to fixed official HTTPS endpoints with redirects refused; no inference calls, no local file scans, no credential passthrough to relays.
-- The Codex adapter reads only the existing native `openai-codex` access grant — never refresh tokens, CLI files or cookies — and prompts for renewal instead of guessing.
+## Privacy and maintenance
 
-## Limitations
+Credentials stay on the local Host and never enter quota results. Quota queries are read-only, use fixed official HTTPS destinations and reject redirects. Native DeepSeek endpoint checks fail closed on invalid, uncertain or relay addresses; no official balance probe or stale official balance is substituted. The quota adapter does not read CLI credentials, cookies or refresh tokens, and does not refresh grants or run inference.
 
-- GLM monitor endpoints follow the official usage plugin and may change; unknown window shapes fail safely rather than showing 0%.
-- Querying a quota does not certify that Harness qualifies for a provider's plan terms.
-- OpenAI Admin-key costs need an organization Admin key; a regular inference key cannot read them.
+See [security boundaries](<SECURITY.md>) and [company-rule coverage/maintenance](<docs/COMPANY_COVERAGE.md>) for endpoint precedence, private-state handling and rule updates.
 
 ## Development
 
 ```sh
-npm run check   # syntax check for every module
-npm test        # 168 tests: parsers, host integration, security boundaries
+npm run check
+npm test
+npm run test:company-coverage
 ```
 
-## Publishing
-
-This package is a standard DSH plugin bundle: `package.json` declares `engines.dsh` and the client entry, and display metadata comes from `locale/*.json` plus `icon.svg`. It installs from npm like any bundle, and it can be listed in a DSH plugin-market index (format 1, validated by `dsh-plugin-market-index`) once you maintain or join an index.
-
-## License
-
-[MIT](LICENSE)
+Tests do not replace real-browser/provider acceptance. Release notes: [Changelog](<CHANGELOG.md>).

@@ -22,7 +22,7 @@ const rejects = async (promise, code = 'invalid-response') => assert.rejects(pro
   return true;
 });
 
-test('queries the official Costs endpoint for 30 complete UTC days and month-to-date', async () => {
+test('queries the official Costs endpoint for complete UTC days, today-to-now, and month-to-date', async () => {
   let calls = 0;
   const metrics = await queryOpenAICosts({ ...base, fetcher: async (address, options) => {
     calls++;
@@ -41,7 +41,7 @@ test('queries the official Costs endpoint for 30 complete UTC days and month-to-
   assert.equal(calls, 1);
   const daily = Array.from({ length: 30 }, (_, index) => ({ date: HISTORY_START + index * DAY_MS, amount: index === 26 ? '12.42' : '0', hasRecords: index === 26 }));
   assert.deepEqual(metrics, [{ type: 'spend', amount: '12.42', currency: 'USD', periodStart: START, periodEnd: Math.floor(NOW / 1000) * 1000, timezone: 'UTC', scope: 'organization', daily,
-    ranges: { '1d': { amount: '0', noRecords: true }, '7d': { amount: '12.42' }, '30d': { amount: '12.42' } },
+    ranges: { '0d': { amount: '0', noRecords: true }, '1d': { amount: '0', noRecords: true }, '7d': { amount: '12.42' }, '30d': { amount: '12.42' } },
   }]);
   assert.ok(!JSON.stringify(metrics).includes(KEY));
 });
@@ -147,7 +147,43 @@ test('each complete-day range aggregates only its dates and matching API-key gro
   assert.equal(usd.breakdown[0].apiKeyId, 'key_Yesterday');
 });
 
-test('daily history covers 30 complete UTC days, excludes today, and keeps MTD separate', async () => {
+test('0d range aggregates only today so far with matching API-key groups', async () => {
+  const bucketAt = (date, results) => ({ object: 'bucket', start_time: date / 1000, end_time: date / 1000 + 86400, results });
+  const entry = (value, api_key_id = null, project_id = null, currency = 'usd') => ({
+    object: 'organization.costs.result', amount: { currency, value }, api_key_id, project_id,
+  });
+  const metrics = await queryOpenAICosts({ ...base, groupByApiKey: true, fetcher: async () => response(page([
+    bucketAt(TODAY - DAY_MS, [entry(0.4, 'key_Yesterday', 'proj_Yesterday')]),
+    bucketAt(TODAY, [
+      entry(0.75, 'key_TodayA', 'proj_TodayA'),
+      entry(0.5, 'key_TodayB', 'proj_TodayB'),
+      entry(0.25),
+      entry(1, 'key_EUR', 'proj_EUR', 'eur'),
+    ]),
+  ])) });
+  const usd = metrics.find(metric => metric.currency === 'USD');
+  assert.equal(usd.ranges['0d'].amount, '1.5');
+  assert.deepEqual(usd.ranges['0d'].breakdown, [
+    { apiKeyId: 'key_TodayA', projectId: 'proj_TodayA', currency: 'USD', amount: '0.75' },
+    { apiKeyId: 'key_TodayB', projectId: 'proj_TodayB', currency: 'USD', amount: '0.5' },
+    { apiKeyId: null, currency: 'USD', amount: '0.25' },
+  ]);
+  assert.equal(usd.ranges['1d'].amount, '0.4');
+  assert.deepEqual(usd.ranges['1d'].breakdown, [
+    { apiKeyId: 'key_Yesterday', projectId: 'proj_Yesterday', currency: 'USD', amount: '0.4' },
+  ]);
+  assert.equal(usd.ranges['7d'].amount, '0.4');
+  assert.equal(usd.ranges['30d'].amount, '0.4');
+  const eur = metrics.find(metric => metric.currency === 'EUR');
+  assert.equal(eur.ranges['0d'].amount, '1');
+  assert.deepEqual(eur.ranges['0d'].breakdown, [
+    { apiKeyId: 'key_EUR', projectId: 'proj_EUR', currency: 'EUR', amount: '1' },
+  ]);
+  assert.equal(eur.ranges['1d'].amount, '0');
+  assert.equal(eur.ranges['1d'].noRecords, true);
+});
+
+test('daily history covers 30 complete UTC days, excludes today from history, and keeps MTD separate', async () => {
   const bucketAt = (date, results) => ({ object: 'bucket', start_time: date / 1000, end_time: date / 1000 + 86400, results });
   let requestUrl;
   const metrics = await queryOpenAICosts({ ...base, fetcher: async address => {
@@ -157,7 +193,7 @@ test('daily history covers 30 complete UTC days, excludes today, and keeps MTD s
       bucketAt(START, [result(1.25)]),
       bucketAt(START + 2 * DAY_MS, [result(2)]),
       bucketAt(START + 3 * DAY_MS, [result(0.5, 'eur')]), // Yesterday.
-      bucketAt(TODAY, [result(99)]), // Partial current day stays out of selectable ranges.
+      bucketAt(TODAY, [result(99)]), // Today's partial bucket is selected separately as 0d.
     ]));
   } });
   assert.equal(requestUrl.searchParams.get('start_time'), String(HISTORY_START / 1000));
@@ -168,6 +204,8 @@ test('daily history covers 30 complete UTC days, excludes today, and keeps MTD s
   assert.deepEqual(usd.daily[26], { date: START, amount: '1.25', hasRecords: true });
   assert.equal(usd.daily.at(-1).date, TODAY - DAY_MS);
   assert.equal(usd.daily.at(-1).amount, '0');
+  assert.equal(usd.ranges['0d'].amount, '99');
+  assert.equal(usd.ranges['0d'].noRecords, undefined);
   assert.equal(usd.ranges['1d'].amount, '0');
   assert.equal(usd.ranges['1d'].noRecords, true);
   assert.equal(usd.ranges['7d'].amount, '10.25');
@@ -192,8 +230,12 @@ test('range noRecords is tracked per currency independently of MTD', async () =>
   assert.equal(eur.daily[0].amount, '3');
   assert.equal(eur.ranges['30d'].amount, '3');
   assert.equal(eur.ranges['30d'].noRecords, undefined);
+  assert.equal(eur.ranges['0d'].amount, '0');
+  assert.equal(eur.ranges['0d'].noRecords, true);
   assert.equal(usd.amount, '2');
   assert.equal(usd.noRecords, undefined);
+  assert.equal(usd.ranges['0d'].amount, '0');
+  assert.equal(usd.ranges['0d'].noRecords, true);
   assert.equal(usd.ranges['30d'].amount, '2');
 });
 
@@ -243,7 +285,7 @@ test('month-start MTD interval stays empty while the 30-day query remains nonzer
     assert.equal(metrics[0].noRecords, true);
     assert.equal(metrics[0].daily.length, 30);
     assert.deepEqual(metrics[0].daily.map(point => point.amount), Array(30).fill('0'));
-    assert.deepEqual(Object.keys(metrics[0].ranges), ['1d', '7d', '30d']);
+    assert.deepEqual(Object.keys(metrics[0].ranges), ['0d', '1d', '7d', '30d']);
     assert.ok(Object.values(metrics[0].ranges).every(range => range.noRecords === true));
   }
   assert.equal(calls, 3);

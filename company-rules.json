@@ -1,0 +1,458 @@
+{
+  "schemaVersion": 1,
+  "revision": 2026111803,
+  "updatedAt": "2026-11-18T09:33:51.921Z",
+  "companies": [
+    {
+      "id": "openai",
+      "names": {
+        "en": "OpenAI",
+        "zh": "OpenAI"
+      },
+      "domains": [
+        "chatgpt.com",
+        "openai.com"
+      ],
+      "icon": "openai",
+      "evidence": [
+        "https://developers.openai.com/",
+        "https://help.openai.com/"
+      ]
+    },
+    {
+      "id": "deepseek",
+      "names": {
+        "en": "DeepSeek",
+        "zh": "DeepSeek"
+      },
+      "domains": [
+        "deepseek.com"
+      ],
+      "icon": "deepseek",
+      "evidence": [
+        "https://api-docs.deepseek.com/"
+      ]
+    },
+    {
+      "id": "moonshot-ai",
+      "names": {
+        "en": "Moonshot AI",
+        "zh": "月之暗面"
+      },
+      "domains": [
+        "moonshot.ai",
+        "moonshot.cn",
+        "kimi.com",
+        "kimi.ai"
+      ],
+      "icon": "kimi",
+      "evidence": [
+        "https://platform.moonshot.ai/docs/",
+        "https://platform.moonshot.cn/docs/",
+        "https://www.kimi.com/code/docs/kimi-code/faq.html",
+        "https://platform.kimi.ai/docs/agreement/modeluse"
+      ]
+    },
+    {
+      "id": "anthropic",
+      "names": {
+        "en": "Anthropic",
+        "zh": "Anthropic"
+      },
+      "domains": [
+        "anthropic.com",
+        "claude.ai"
+      ],
+      "icon": "anthropic",
+      "evidence": [
+        "https://platform.claude.com/docs/",
+        "https://www.anthropic.com/"
+      ]
+    },
+    {
+      "id": "google-gemini",
+      "names": {
+        "en": "Google",
+        "zh": "Google"
+      },
+      "domains": [
+        "google.com"
+      ],
+      "hostSuffixes": [
+        "googleapis.com"
+      ],
+      "icon": "google",
+      "evidence": [
+        "https://ai.google.dev/gemini-api/docs/",
+        "https://support.google.com/gemini/"
+      ]
+    },
+    {
+      "id": "minimax",
+      "names": {
+        "en": "MiniMax",
+        "zh": "MiniMax"
+      },
+      "domains": [
+        "minimax.cn",
+        "minimax.io",
+        "minimaxi.com"
+      ],
+      "icon": "minimax",
+      "evidence": [
+        "https://platform.minimax.io/docs/",
+        "https://platform.minimaxi.com/"
+      ]
+    },
+    {
+      "id": "zhipu-ai",
+      "names": {
+        "en": "Zhipu AI",
+        "zh": "智谱 AI"
+      },
+      "domains": [
+        "bigmodel.cn",
+        "z.ai"
+      ],
+      "icon": "glm",
+      "evidence": [
+        "https://docs.bigmodel.cn/",
+        "https://docs.z.ai/"
+      ]
+    },
+    {
+      "id": "spacexsi-grok",
+      "names": {
+        "en": "SpaceXSI",
+        "zh": "SpaceXSI"
+      },
+      "domains": [
+        "grok.com",
+        "x.ai"
+      ],
+      "icon": "xai",
+      "evidence": [
+        "https://docs.x.ai/",
+        "https://grok.com/"
+      ]
+    },
+    {
+      "id": "ant-group",
+      "names": {
+        "en": "Ant Group",
+        "zh": "蚂蚁集团"
+      },
+      "domains": [
+        "ant-ling.com"
+      ],
+      "icon": "ant-group",
+      "evidence": [
+        "https://developer.ant-ling.com/zh-CN/docs/faq/",
+        "https://developer.ant-ling.com/zh-CN/docs/getting-started/quickstart/"
+      ]
+    },
+    {
+      "id": "baseten",
+      "names": {
+        "en": "Baseten",
+        "zh": "Baseten"
+      },
+      "domains": [
+        "baseten.co"
+      ],
+      "icon": "baseten",
+      "evidence": [
+        "https://docs.baseten.co/reference/inference-api/overview.md",
+        "https://www.baseten.co/terms-and-conditions-january-30-2026/"
+      ]
+    },
+    {
+      "id": "cerebras",
+      "names": {
+        "en": "Cerebras",
+        "zh": "Cerebras"
+      },
+      "domains": [
+        "cerebras.ai",
+        "cerebras.net"
+      ],
+      "icon": "cerebras",
+      "evidence": [
+        "https://inference-docs.cerebras.ai/quickstart.md",
+        "https://www.cerebras.ai/terms-of-service"
+      ]
+    },
+    {
+      "id": "fireworks-ai",
+      "names": {
+        "en": "Fireworks AI",
+        "zh": "Fireworks AI"
+      },
+      "domains": [
+        "fireworks.ai"
+      ],
+      "icon": "fireworks-ai",
+      "evidence": [
+        "https://docs.fireworks.ai/nexus/apis-and-sdks.md"
+      ]
+    },
+    {
+      "id": "github",
+      "names": {
+        "en": "GitHub",
+        "zh": "GitHub"
+      },
+      "domains": [
+        "githubcopilot.com",
+        "github.com"
+      ],
+      "icon": "github",
+      "evidence": [
+        "https://docs.github.com/en/copilot/reference/copilot-allowlist-reference"
+      ]
+    },
+    {
+      "id": "groq",
+      "names": {
+        "en": "Groq",
+        "zh": "Groq"
+      },
+      "domains": [
+        "groq.com"
+      ],
+      "icon": "groq",
+      "evidence": [
+        "https://console.groq.com/docs/openai.md",
+        "https://groq.com/terms-of-use"
+      ]
+    },
+    {
+      "id": "hugging-face",
+      "names": {
+        "en": "Hugging Face",
+        "zh": "Hugging Face"
+      },
+      "domains": [
+        "huggingface.co"
+      ],
+      "icon": "hugging-face",
+      "evidence": [
+        "https://huggingface.co/docs/inference-providers/en/tasks/chat-completion",
+        "https://huggingface.co/terms-of-service"
+      ]
+    },
+    {
+      "id": "meta",
+      "names": {
+        "en": "Meta",
+        "zh": "Meta"
+      },
+      "domains": [
+        "meta.ai"
+      ],
+      "icon": "meta",
+      "evidence": [
+        "https://about.fb.com/news/2025/04/introducing-meta-ai-app-new-way-access-ai-assistant/amp/",
+        "https://ai.meta.com/meta-ai/"
+      ]
+    },
+    {
+      "id": "mistral-ai",
+      "names": {
+        "en": "Mistral AI",
+        "zh": "Mistral AI"
+      },
+      "domains": [
+        "mistral.ai"
+      ],
+      "icon": "mistral-ai",
+      "evidence": [
+        "https://docs.mistral.ai/openapi.yaml"
+      ]
+    },
+    {
+      "id": "nvidia",
+      "names": {
+        "en": "NVIDIA",
+        "zh": "NVIDIA"
+      },
+      "domains": [
+        "nvidia.com"
+      ],
+      "icon": "nvidia",
+      "evidence": [
+        "https://docs.api.nvidia.com/nim/reference/llm-apis.md"
+      ]
+    },
+    {
+      "id": "openrouter",
+      "names": {
+        "en": "OpenRouter",
+        "zh": "OpenRouter"
+      },
+      "domains": [
+        "openrouter.ai"
+      ],
+      "icon": "openrouter",
+      "evidence": [
+        "https://openrouter.ai/docs/quickstart.md"
+      ]
+    },
+    {
+      "id": "alibaba-cloud",
+      "names": {
+        "en": "Alibaba Cloud",
+        "zh": "阿里云"
+      },
+      "domains": [],
+      "exactHosts": [
+        "token-plan.ap-southeast-1.maas.aliyuncs.com",
+        "token-plan.cn-beijing.maas.aliyuncs.com"
+      ],
+      "icon": "alibaba-cloud",
+      "evidence": [
+        "https://www.alibabacloud.com/help/en/model-studio/openclaw.md"
+      ]
+    },
+    {
+      "id": "earendil",
+      "names": {
+        "en": "Earendil Inc.",
+        "zh": "Earendil Inc."
+      },
+      "domains": [
+        "pi.dev",
+        "earendil.com"
+      ],
+      "icon": "pi",
+      "evidence": [
+        "https://pi.dev/models/radius/precise",
+        "https://earendil.com/"
+      ]
+    },
+    {
+      "id": "together-ai",
+      "names": {
+        "en": "Together AI",
+        "zh": "Together AI"
+      },
+      "domains": [
+        "together.ai"
+      ],
+      "icon": "together-ai",
+      "evidence": [
+        "https://docs.together.ai/docs/inference/openai-compatibility.md"
+      ]
+    },
+    {
+      "id": "vercel",
+      "names": {
+        "en": "Vercel",
+        "zh": "Vercel"
+      },
+      "domains": [
+        "vercel.com"
+      ],
+      "exactHosts": [
+        "ai-gateway.vercel.sh"
+      ],
+      "icon": "vercel",
+      "evidence": [
+        "https://vercel.com/docs/ai-gateway/sdks-and-apis/openai-chat-completions.md"
+      ]
+    },
+    {
+      "id": "xiaomi",
+      "names": {
+        "en": "Xiaomi",
+        "zh": "小米"
+      },
+      "domains": [
+        "xiaomimimo.com"
+      ],
+      "icon": "xiaomi",
+      "evidence": [
+        "https://mimo.mi.com/llms-full.txt",
+        "https://mimo.mi.com/"
+      ]
+    },
+    {
+      "id": "anomaly",
+      "names": {
+        "en": "Anomaly",
+        "zh": "Anomaly"
+      },
+      "domains": [
+        "opencode.ai"
+      ],
+      "icon": "opencode",
+      "evidence": [
+        "https://opencode.ai/legal/terms-of-service",
+        "https://opencode.ai/docs/console/models/"
+      ]
+    },
+    {
+      "id": "typesafe-ai",
+      "names": {
+        "en": "TypeSafe AI",
+        "zh": "TypeSafe AI"
+      },
+      "domains": [
+        "typesafe.ai"
+      ],
+      "icon": "typesafe-ai",
+      "evidence": [
+        "https://docs.typesafe.ai/sdk/javascript/api/interfaces/TypeSafeClientConfig.md",
+        "https://typesafe.ai/legal/mca"
+      ]
+    },
+    {
+      "id": "amazon-web-services",
+      "names": {
+        "en": "Amazon Web Services",
+        "zh": "亚马逊云科技"
+      },
+      "domains": [],
+      "exactHosts": [
+        "bedrock-runtime.us-east-1.amazonaws.com",
+        "bedrock-runtime.eu-central-1.amazonaws.com"
+      ],
+      "icon": "amazon-web-services",
+      "evidence": [
+        "https://docs.aws.amazon.com/general/latest/gr/bedrock.html"
+      ]
+    },
+    {
+      "id": "microsoft",
+      "names": {
+        "en": "Microsoft",
+        "zh": "微软"
+      },
+      "domains": [
+        "microsoft.com"
+      ],
+      "hostSuffixes": [
+        "openai.azure.com",
+        "services.ai.azure.com"
+      ],
+      "icon": "microsoft",
+      "evidence": [
+        "https://learn.microsoft.com/en-us/azure/foundry/openai/api-version-lifecycle"
+      ]
+    },
+    {
+      "id": "cloudflare",
+      "names": {
+        "en": "Cloudflare",
+        "zh": "Cloudflare"
+      },
+      "domains": [
+        "cloudflare.com"
+      ],
+      "icon": "cloudflare",
+      "evidence": [
+        "https://developers.cloudflare.com/ai-gateway/usage/providers/openai/"
+      ]
+    }
+  ]
+}

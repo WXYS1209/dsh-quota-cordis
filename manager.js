@@ -1,18 +1,35 @@
 import { createHash } from 'node:crypto';
-import { classifyProvider, parseDeepSeek, parseGlm, parseMiniMax } from './adapters.js';
+import { PLUGIN_VERSION } from './version.js';
+import { classifyProvider, parseDeepSeek, parseGlm, parseGlmResourcePackagePage, parseGlmStandardBalance, parseMiniMax } from './adapters.js';
 import { resolveOpenAIAdminKey } from './openai-admin.js';
 import { queryOpenAICosts } from './openai-costs.js';
 import { queryOpenAIKeyNames } from './openai-key-names.js';
 import { queryOpenCodeUsage } from './opencode-usage.js';
 import { resolveNativeCodexCredential, queryCodexUsage } from './codex-usage.js';
 import { DEFAULT_COLOR_THRESHOLDS, validateColorThresholds } from './quota-settings.js';
+import { resolveProviderBaseURL } from './route-hosts.js';
 
 const ENDPOINTS = Object.freeze({
   deepseek: 'https://api.deepseek.com/user/balance',
   'glm-cn': 'https://open.bigmodel.cn/api/monitor/usage/quota/limit',
   'zai-coding-plan': 'https://api.z.ai/api/monitor/usage/quota/limit',
   'minimax-cn': 'https://www.minimax.cn/v1/token_plan/remains',
+  'glm-standard-balance': 'https://open.bigmodel.cn/api/biz/account/query-customer-account-report',
+  'glm-standard-packages': 'https://open.bigmodel.cn/api/biz/tokenAccounts/list/my?pageNum=1&pageSize=50&filterEnabled=false',
 });
+const RESOURCE_PACKAGE_PAGE_SIZE = 50;
+const MAX_RESOURCE_PACKAGE_PAGES = 10;
+function resourcePackageUrl(pageNum) {
+  return `https://open.bigmodel.cn/api/biz/tokenAccounts/list/my?pageNum=${pageNum}&pageSize=${RESOURCE_PACKAGE_PAGE_SIZE}&filterEnabled=false`;
+}
+const RESOURCE_PACKAGE_URLS = new Set(Array.from({ length: MAX_RESOURCE_PACKAGE_PAGES }, (_, index) => resourcePackageUrl(index + 1)));
+const ALLOWED_ENDPOINTS = new Set([...Object.values(ENDPOINTS), ...RESOURCE_PACKAGE_URLS]);
+const BEARER_ENDPOINTS = new Set([
+  ENDPOINTS.deepseek,
+  ENDPOINTS['minimax-cn'],
+  ENDPOINTS['glm-standard-balance'],
+  ...RESOURCE_PACKAGE_URLS,
+]);
 const TTL = 120_000;
 const own = (object, key) => Object.prototype.hasOwnProperty.call(object ?? {}, key);
 const hash = value => createHash('sha256').update(value).digest('hex');
@@ -36,16 +53,29 @@ function failure(code) {
   return Object.assign(new Error(code), { code });
 }
 
+async function readGlmResourcePackages(key, options) {
+  const first = parseGlmResourcePackagePage(await readJson(ENDPOINTS['glm-standard-packages'], key, options));
+  if (first.total > RESOURCE_PACKAGE_PAGE_SIZE * MAX_RESOURCE_PACKAGE_PAGES) throw failure('invalid-response');
+  const pageCount = Math.max(1, Math.ceil(first.total / RESOURCE_PACKAGE_PAGE_SIZE));
+  const otherPages = await Promise.all(Array.from({ length: pageCount - 1 }, (_, index) =>
+    readJson(resourcePackageUrl(index + 2), key, options).then(parseGlmResourcePackagePage)));
+  const pages = [first, ...otherPages];
+  if (pages.some(page => page.total !== first.total)) throw failure('invalid-response');
+  const packages = pages.flatMap(page => page.packages);
+  if (packages.length !== first.total) throw failure('invalid-response');
+  return packages;
+}
+
 // Only fixed HTTPS destinations are ever contacted. Redirects and upstream error bodies
 // are deliberately not exposed to the UI or logs.
 export async function readJson(url, key, { fetcher = fetch, signal } = {}) {
-  if (!Object.values(ENDPOINTS).includes(url)) throw failure('unsupported');
+  if (!ALLOWED_ENDPOINTS.has(url)) throw failure('unsupported');
   const combined = AbortSignal.any([AbortSignal.timeout(12_000), ...(signal ? [signal] : [])]);
   let response;
   try {
     // DeepSeek and MiniMax require Bearer; GLM monitors (including the official
     // Z.AI Coding Plan usage plugin) expect the configured key as a raw token.
-    const bearerAuth = url === ENDPOINTS.deepseek || url === ENDPOINTS['minimax-cn'];
+    const bearerAuth = BEARER_ENDPOINTS.has(url);
     response = await fetcher(url, {
       method: 'GET', redirect: 'error', signal: combined,
       headers: { Authorization: bearerAuth ? `Bearer ${key}` : key, Accept: 'application/json' },
@@ -81,7 +111,7 @@ export async function readJson(url, key, { fetcher = fetch, signal } = {}) {
 }
 
 export class QuotaManager {
-  constructor(services, { fetcher = fetch, now = Date.now, version = '0.2.2-rc.1', adminKeyResolver = () => resolveOpenAIAdminKey(services.credentials), colorThresholdsProvider = () => DEFAULT_COLOR_THRESHOLDS } = {}) {
+  constructor(services, { fetcher = fetch, now = Date.now, version = 'unknown', adminKeyResolver = () => resolveOpenAIAdminKey(services.credentials), colorThresholdsProvider = () => DEFAULT_COLOR_THRESHOLDS } = {}) {
     this.services = services;
     this.colorThresholdsProvider = colorThresholdsProvider;
     this.adminKeyResolver = adminKeyResolver;
@@ -134,7 +164,7 @@ export class QuotaManager {
     return undefined;
   }
   async discover() {
-    const { llm, settings, credentials, deepseekAccount } = this.services;
+    const { llm, settings, credentials, deepseekAccount, launchEnvironment } = this.services;
     const directory = await llm.listConfigurableProviders();
     const registered = new Map((await llm.listProviders()).map(row => [row.id, row]));
     const documents = new Map((await settings.describe({ redactSecrets: true })).map(doc => [String(doc.ns), doc.value]));
@@ -160,18 +190,15 @@ export class QuotaManager {
       // Whole-section built-ins are always mounted, unlike saved pi-ai profiles.
       // Omit their pristine setup posture unless their credential is actually present.
       if (path.length === 0 && explicitRef && !(await credentials.describe(explicitRef)).configured) continue;
-      let baseURL = profile.baseURL;
-      if (typeof baseURL !== 'string' || !baseURL.trim()) {
-        baseURL = undefined;
-        for (const ref of entry.baseURLEnv ?? []) {
-          const found = (await credentials.resolve(ref))?.value;
-          if (found) { baseURL = found; break; }
-        }
-        // Native DeepSeek publishes this launch override outside pi-ai's directory.
-        if (!baseURL && entry.provider === 'deepseek-official') baseURL = (await credentials.resolve('DEEPSEEK_BASE_URL'))?.value;
-        baseURL ??= entry.defaultBaseURL;
+      let classification;
+      try {
+        const baseURL = await resolveProviderBaseURL(entry, profile, credentials, { launchEnvironment });
+        classification = classifyProvider({ provider: entry.provider, baseURL });
+      } catch {
+        // Uncertain/invalid endpoint metadata must not trigger route-name
+        // defaults, API-key resolution, cached balances, or a provider request.
+        classification = { kind: 'unsupported', dashboardUrl: null };
       }
-      const classification = classifyProvider({ provider: entry.provider, baseURL });
       const authHeaders = Object.keys(profile.headers ?? {}).some(name => /authorization|api[-_]?key|auth[-_]?token/i.test(name));
       rows.push({
         id: entry.provider,
@@ -238,7 +265,7 @@ export class QuotaManager {
     const existing = this.inflight.get(identity);
     if (existing) return { ...base, ...await existing };
     const operation = (async () => {
-      const source = row.kind === 'account' ? 'harness-account' : row.kind === 'codex' ? 'codex-usage' : row.kind === 'openai' ? 'official-costs' : row.kind === 'opencode-go' ? 'opencode-usage' : row.kind === 'minimax-cn' ? 'minimax-plan' : row.kind === 'zai-coding-plan' ? 'zai-plan-usage' : row.kind === 'deepseek' ? 'official-balance' : 'provider-monitor';
+      const source = row.kind === 'account' ? 'harness-account' : row.kind === 'codex' ? 'codex-usage' : row.kind === 'openai' ? 'official-costs' : row.kind === 'opencode-go' ? 'opencode-usage' : row.kind === 'minimax-cn' ? 'minimax-plan' : row.kind === 'zai-coding-plan' ? 'zai-plan-usage' : row.kind === 'glm-standard-cn' ? 'glm-standard-api' : row.kind === 'deepseek' ? 'official-balance' : 'provider-monitor';
       try {
         let metrics;
         if (row.kind === 'codex') {
@@ -278,6 +305,13 @@ export class QuotaManager {
           metrics = result.value.map(wallet => ({ type: 'balance', currency: wallet.currency, amount: wallet.balance, wallet: 'recharge' }));
           metrics.push(...(result.bonusWallets ?? []).map(wallet => ({ type: 'balance', currency: wallet.currency, amount: wallet.balance, wallet: 'bonus' })));
           if (metrics.length === 0) throw failure('invalid-response');
+        } else if (row.kind === 'glm-standard-cn') {
+          const options = { fetcher: this.fetcher, signal: this.controller.signal };
+          const [balanceJson, packages] = await Promise.all([
+            readJson(ENDPOINTS['glm-standard-balance'], key, options),
+            readGlmResourcePackages(key, options),
+          ]);
+          metrics = [parseGlmStandardBalance(balanceJson), ...packages];
         } else {
           const json = await readJson(ENDPOINTS[row.kind], key, { fetcher: this.fetcher, signal: this.controller.signal });
           metrics = row.kind === 'deepseek' ? parseDeepSeek(json) : row.kind === 'minimax-cn' ? parseMiniMax(json) : parseGlm(json);
@@ -328,6 +362,6 @@ export class QuotaManager {
     }));
     for (const [id, item] of this.cache) if (this.now() - item.touchedAt > 3_600_000) this.cache.delete(id);
     const defaultProvider = this.services.agentDefaultModel?.currentSelection()?.provider;
-    return { rows, checkedAt: this.now(), refreshAfterMs: TTL, pluginVersion: '0.7.2', colorThresholds: validateColorThresholds(this.colorThresholdsProvider()), ...(defaultProvider ? { defaultProvider } : {}) };
+    return { rows, checkedAt: this.now(), refreshAfterMs: TTL, pluginVersion: PLUGIN_VERSION, colorThresholds: validateColorThresholds(this.colorThresholdsProvider()), ...(defaultProvider ? { defaultProvider } : {}) };
   }
 }

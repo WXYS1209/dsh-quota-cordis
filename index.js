@@ -1,6 +1,11 @@
 import { QuotaManager } from './manager.js';
+import { CodexOAuthController } from './codex-oauth.js';
+import { resolveDshRuntimeVersion } from './version.js';
 import { describeOpenAIAdminKey, resolveOpenAIAdminKey } from './openai-admin.js';
-import { QuotaColorSettings, readSmallSettingsBody } from './quota-settings.js';
+import { CompanyDomainAliasSettings, QuotaColorSettings } from './quota-settings.js';
+import { readProviderRouteHosts, nativeDeepSeekEndpointEnvironment } from './route-hosts.js';
+import { CompanyRulesManager } from './company-rules.js';
+import { createCompanyRulesCache } from './company-rules-storage.js';
 
 export const name = 'provider-quota';
 export const inject = ['llm', 'settings', 'credentials', 'connection', 'tools'];
@@ -35,18 +40,122 @@ async function readSettingsPayload(request) {
   }
 }
 
+// The SDK HTTP bridge preserves Host/Origin but uses http://dsh.internal as
+// Request.url. Compare browser origins to Host, not that synthetic carrier URL.
+function sameOriginOAuthRequest(request) {
+  const site = request.headers.get('Sec-Fetch-Site');
+  if (site && !['same-origin', 'none'].includes(site)) return false;
+  const origin = request.headers.get('Origin');
+  if (origin === null) return true; // Authenticated non-browser clients still need CSRF for writes.
+  try {
+    const parsed = new URL(origin);
+    if (!['http:', 'https:'].includes(parsed.protocol) || parsed.origin !== origin || parsed.username || parsed.password) return false;
+    const carrier = new URL(request.url);
+    const host = request.headers.get('Host') ?? (carrier.hostname !== 'dsh.internal' ? carrier.host : null);
+    if (!host || /[\\/@?#\s]/.test(host)) return false;
+    const authority = new URL(`${parsed.protocol}//${host}`);
+    return authority.host === parsed.host && !authority.username && !authority.password && authority.pathname === '/' && !authority.search && !authority.hash;
+  } catch { return false; }
+}
+
 export function apply(ctx, config = {}) {
   const editor = ctx.get('configEditor');
   const entry = ctx.fiber?.entry;
   const colors = new QuotaColorSettings(config.colorThresholds, editor && entry ? async colorThresholds => {
     await editor.edit(entry, current => ({ ...current, colorThresholds }));
   } : undefined);
+  const domainAliases = new CompanyDomainAliasSettings(config.domainAliases, editor && entry ? async value => {
+    await editor.edit(entry, current => ({ ...current, domainAliases: value }));
+  } : undefined);
+  const launchEnvironment = nativeDeepSeekEndpointEnvironment(ctx.get('launchEnvironment'), () => process.env.DEEPSEEK_BASE_URL);
   const manager = new QuotaManager({
-    llm: ctx.llm, settings: ctx.settings, credentials: ctx.credentials,
+    llm: ctx.llm, settings: ctx.settings, credentials: ctx.credentials, launchEnvironment,
     deepseekAccount: ctx.get('deepseekAccount'), agentDefaultModel: ctx.get('agentDefaultModel'),
-  }, { colorThresholdsProvider: () => colors.read().colorThresholds });
+  }, { version: resolveDshRuntimeVersion(), colorThresholdsProvider: () => colors.read().colorThresholds });
   ctx.effect(() => () => manager.dispose());
   ctx.provide('providerQuota', manager);
+  const codexOAuth = new CodexOAuthController({
+    llm: ctx.llm, settings: ctx.settings, credentials: ctx.credentials,
+    authorization: () => ctx.get('authorization'),
+  });
+  ctx.effect(() => () => codexOAuth.dispose());
+  ctx.provide('providerQuotaCodexOAuth', codexOAuth);
+  const codexOAuthFetch = async request => {
+    const headers = { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer' };
+    if (!sameOriginOAuthRequest(request)) return Response.json({ error: 'forbidden' }, { status: 403, headers });
+    try {
+      if (request.method === 'GET') return Response.json(await codexOAuth.read(), { headers });
+      if (request.method !== 'POST') return Response.json({ error: 'invalid-request' }, { status: 405, headers });
+      if (!codexOAuth.csrfMatches(request.headers.get('X-Quota-Codex-CSRF')) || !/^application\/json(?:\s*;|$)/i.test(request.headers.get('Content-Type') ?? '')) {
+        return Response.json({ error: 'forbidden' }, { status: 403, headers });
+      }
+      const raw = await readSettingsPayload(request);
+      return Response.json(await codexOAuth.mutate(raw), { headers });
+    } catch (cause) {
+      const safe = new Set(['invalid-request', 'invalid-mode', 'invalid-callback', 'flow-unavailable', 'route-missing', 'api-key-override', 'endpoint-override', 'busy', 'attempt-mismatch', 'prompt-mismatch', 'not-active', 'conflict', 'auth-failed', 'not-committed', 'unsupported-prompt', 'unsafe-auth-link', 'expired', 'timeout']);
+      const error = safe.has(cause?.code) ? cause.code : 'service-unavailable';
+      const status = ['invalid-request', 'invalid-mode', 'invalid-callback'].includes(error) ? 400 : error === 'service-unavailable' ? 503 : 409;
+      return Response.json({ error }, { status, headers });
+    }
+  };
+  // GET has no body; stream POSTs so the SDK's aggregate JSON buffer is never
+  // allocated before our 16 KiB / five-second mutation-body fence runs.
+  ctx.effect(() => ctx.connection.fetch.register({
+    path: '/api/provider-quota-codex-oauth', methods: ['GET'], requestBody: 'buffered', fetch: codexOAuthFetch,
+  }));
+  ctx.effect(() => ctx.connection.fetch.register({
+    path: '/api/provider-quota-codex-oauth/action', methods: ['POST'], requestBody: 'streaming', fetch: codexOAuthFetch,
+  }));
+  const companyRules = new CompanyRulesManager({ cache: createCompanyRulesCache(ctx) });
+  ctx.provide('providerCompanyRules', companyRules);
+  ctx.effect(() => () => companyRules.dispose());
+  const companyRulesOperation = async (args = {}) => {
+    if (!args || typeof args !== 'object' || Array.isArray(args) || Object.keys(args).some(key => key !== 'action')) throw Object.assign(new Error('invalid-request'), { code: 'invalid-request' });
+    const action = args.action === undefined ? 'read' : args.action;
+    if (action === 'read') return companyRules.read();
+    if (action === 'refresh') return companyRules.refresh();
+    throw Object.assign(new Error('invalid-request'), { code: 'invalid-request' });
+  };
+  ctx.effect(() => ctx.connection.fetch.register({
+    path: '/api/provider-quota-company-rules', methods: ['GET', 'POST'], requestBody: 'buffered',
+    async fetch(request) {
+      const headers = { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' };
+      try {
+        if (request.method === 'GET') return Response.json({ ...await companyRulesOperation(), csrf: colors.browserRead().csrf }, { headers });
+        if (!colors.csrfMatches(request.headers.get('X-Quota-Settings-CSRF')) || !/^application\/json(?:\s*;|$)/i.test(request.headers.get('Content-Type') ?? '')) return Response.json({ error: 'forbidden' }, { status: 403, headers });
+        const raw = await readSettingsPayload(request);
+        if (raw.action !== 'refresh' || Object.keys(raw).some(key => key !== 'action')) throw Object.assign(new Error('invalid-request'), { code: 'invalid-request' });
+        return Response.json({ ...await companyRulesOperation(raw), csrf: colors.browserRead().csrf }, { headers });
+      } catch (cause) {
+        const invalid = cause?.code === 'invalid-request';
+        return Response.json({ error: invalid ? 'invalid-request' : 'rules-unavailable' }, { status: invalid ? 400 : 503, headers });
+      }
+    },
+  }));
+  ctx.effect(() => ctx.tools.register({
+    name: 'provider_company_rules',
+    description: 'Read company-domain grouping rules and update status, or refresh from the single bundled public rule-source URL. Read may check for updates in the background; refresh shares a 60-second cooldown. No provider domains, credentials, or configurable URLs are sent.',
+    deferLoading: true,
+    parameters: { type: 'object', properties: { action: { type: 'string', enum: ['read', 'refresh'], description: 'Default read. Refresh checks the fixed public source and retains last-known-good rules on failure.' } }, additionalProperties: false },
+    output: { schema: { type: 'object', additionalProperties: true }, render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }] },
+    timeoutMs: 15_000,
+    isConcurrencySafe: () => true,
+    async execute(args) {
+      try { return await companyRulesOperation(args); }
+      catch (cause) { return { error: cause?.code === 'invalid-request' ? 'invalid-request' : 'rules-unavailable' }; }
+    },
+  }));
+  ctx.effect(() => ctx.connection.fetch.register({
+    path: '/api/provider-quota-route-hosts', methods: ['GET'], requestBody: 'buffered',
+    async fetch(request) {
+      const headers = { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' };
+      try {
+        return Response.json(await readProviderRouteHosts({ llm: ctx.llm, settings: ctx.settings, credentials: ctx.credentials, launchEnvironment, deepseekAccount: ctx.get('deepseekAccount') }, { signal: request.signal }), { headers });
+      } catch {
+        return Response.json({ error: 'route-hosts-unavailable' }, { status: 503, headers });
+      }
+    },
+  }));
   const colorOperation = async ({ action = 'read', greenMin, orangeMin } = {}) => {
     if (action === 'read') return colors.read();
     if (action !== 'set') throw Object.assign(new Error('invalid-thresholds'), { code: 'invalid-thresholds' });
@@ -61,7 +170,7 @@ export function apply(ctx, config = {}) {
       return { configured: false, source: null, error: code };
     }
   };
-  const settingsSnapshot = async () => ({ ...colors.browserRead(), adminKey: await adminStatus() });
+  const settingsSnapshot = async () => ({ ...colors.browserRead(), ...domainAliases.read(), adminKey: await adminStatus() });
   ctx.effect(() => ctx.connection.fetch.register({
     path: '/api/provider-quota-settings', methods: ['GET', 'POST'], requestBody: 'buffered',
     async fetch(request) {
@@ -70,6 +179,11 @@ export function apply(ctx, config = {}) {
         if (request.method === 'GET') return Response.json(await settingsSnapshot(), { headers });
         if (!colors.csrfMatches(request.headers.get('X-Quota-Settings-CSRF')) || !/^application\/json(?:\s*;|$)/i.test(request.headers.get('Content-Type') ?? '')) return Response.json({ error: 'forbidden' }, { status: 403, headers });
         const raw = await readSettingsPayload(request);
+        if (raw.action === 'saveDomainAliases') {
+          if (!Object.hasOwn(raw, 'domainAliases') || Object.keys(raw).some(key => !['action', 'domainAliases'].includes(key))) throw Object.assign(new Error('invalid-domain-aliases'), { code: 'invalid-domain-aliases' });
+          await domainAliases.save(raw.domainAliases);
+          return Response.json({ ...(await settingsSnapshot()), saved: true, savedItem: 'domainAliases' }, { headers });
+        }
         if (raw.action === 'saveAdminKey') {
           if (Object.keys(raw).some(key => !['action', 'adminKey'].includes(key)) || !validAdminKey(raw.adminKey)) throw Object.assign(new Error('invalid-admin-key'), { code: 'invalid-admin-key' });
           await ctx.credentials.set(ADMIN_KEY_REF, raw.adminKey);
@@ -81,9 +195,9 @@ export function apply(ctx, config = {}) {
         await colorOperation({ action: 'set', ...value });
         return Response.json({ ...(await settingsSnapshot()), saved: true, savedItem: 'colorThresholds' }, { headers });
       } catch (cause) {
-        const allowed = ['invalid-thresholds', 'invalid-admin-key', 'admin-credential-error', 'invalid-request', 'settings-unavailable', 'settings-conflict', 'save-failed'];
+        const allowed = ['invalid-thresholds', 'invalid-domain-aliases', 'invalid-admin-key', 'admin-credential-error', 'invalid-request', 'settings-unavailable', 'settings-conflict', 'save-failed'];
         const code = allowed.includes(cause?.code) ? cause.code : 'save-failed';
-        return Response.json({ error: code }, { status: ['invalid-thresholds', 'invalid-admin-key', 'invalid-request'].includes(code) ? 400 : code === 'settings-conflict' ? 409 : 503, headers });
+        return Response.json({ error: code }, { status: ['invalid-thresholds', 'invalid-domain-aliases', 'invalid-admin-key', 'invalid-request'].includes(code) ? 400 : code === 'settings-conflict' ? 409 : 503, headers });
       }
     },
   }));

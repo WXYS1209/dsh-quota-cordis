@@ -19,14 +19,13 @@ const DASHBOARDS = Object.freeze({
 });
 const HOSTS = Object.freeze({
   'api.deepseek.com': 'deepseek',
-  'open.bigmodel.cn': 'glm-cn',
   'api.minimax.cn': 'minimax-cn',
   'api.minimaxi.com': 'minimax-cn',
   'api.openai.com': 'openai',
 });
 const ROUTES = Object.freeze({
-  deepseek: 'deepseek',
-  'deepseek-official': 'deepseek',
+  // DeepSeek quota probes require an explicit, verified endpoint. Native
+  // defaults are supplied only by the Host resolver, never by a route name.
   openai: 'openai',
   zai: 'zai-coding-plan',
   'zai-coding-cn': 'glm-cn',
@@ -58,14 +57,24 @@ export function classifyProvider({ provider, baseURL } = {}) {
     try {
       const url = new URL(baseURL);
       if (url.protocol === 'https:' && !url.username && !url.password && !url.port) {
-        // The DSH built-in `zai` provider is its Global Coding Plan route. Use that
-        // exact provider identity for the plan monitor; arbitrary/custom Z.AI routes
-        // remain non-querying because Standard API keys have no published billing API.
-        if (url.hostname === 'api.z.ai') {
-          if (provider === 'zai') kind = 'zai-coding-plan';
-          else return { kind: 'unsupported', dashboardUrl: DASHBOARDS['zai-api'], reason: 'zai-api-status-only' };
-        }
-        if (url.hostname === 'opencode.ai') {
+        if (url.hostname === 'api.z.ai' || url.hostname === 'open.bigmodel.cn') {
+          const path = url.pathname.replace(/\/+$/, '') || '/';
+          const noExtras = !url.search && !url.hash;
+          if (noExtras && path === '/api/paas/v4') {
+            // Domestic Standard API uses separate account endpoints; never route
+            // it through a Coding Plan monitor. The international account schema
+            // has not been established, so that route remains status-only.
+            return url.hostname === 'open.bigmodel.cn'
+              ? { kind: 'glm-standard-cn', dashboardUrl: null }
+              : { kind: 'unsupported', dashboardUrl: DASHBOARDS['zai-api'], reason: 'zai-api-status-only' };
+          }
+          if (noExtras && path === '/api/coding/paas/v4') {
+            kind = url.hostname === 'api.z.ai' ? 'zai-coding-plan' : 'glm-cn';
+          } else {
+            // Unknown Z.AI/GLM paths fail closed instead of inheriting a plan by host.
+            return { kind: 'unsupported', dashboardUrl: null };
+          }
+        } else if (url.hostname === 'opencode.ai') {
           if (/^\/zen\/go\/v1\/?$/.test(url.pathname) && !url.search && !url.hash) kind = 'opencode-go';
         } else if (own(HOSTS, url.hostname)) {
           kind = HOSTS[url.hostname];
@@ -248,4 +257,116 @@ export function parseMiniMax(json) {
   }
   if (!metrics.length) invalid();
   return metrics;
+}
+
+function standardMoney(value) {
+  if (typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= Number.MAX_SAFE_INTEGER) return String(value);
+  if (typeof value === 'string' && /^\d+(?:\.\d+)?$/.test(value) && Number.isFinite(Number(value))) return value;
+  invalid();
+}
+
+function standardCount(value) {
+  if (typeof value === 'number' && Number.isSafeInteger(value) && value >= 0) return value;
+  if (typeof value === 'string' && /^\d+$/.test(value) && Number.isSafeInteger(Number(value))) return Number(value);
+  invalid();
+}
+
+function optionalStandardMoney(row, key) {
+  if (!own(row, key) || row[key] === null) return undefined;
+  return standardMoney(row[key]);
+}
+
+function packageText(value, { required = false } = {}) {
+  if (value === undefined || value === null) {
+    if (required) invalid();
+    return undefined;
+  }
+  if (typeof value === 'string') {
+    if ((!value && required) || value.length > 500 || /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(value)) invalid();
+    return value || undefined;
+  }
+  if (Array.isArray(value) && value.length <= 50 && value.every(part => typeof part === 'string' && part.length <= 200 && !/[\u0000-\u001f\u007f]/.test(part))) return value.filter(Boolean).join(', ') || undefined;
+  invalid();
+}
+
+function packageExpiration(value) {
+  if (value === undefined || value === null || value === '') return undefined;
+  if (typeof value !== 'string') invalid();
+  const match = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?(Z|[+-]\d{2}:\d{2})?$/.exec(value);
+  if (!match) invalid();
+  const [, year, month, day, hour, minute, second] = match;
+  const wallClock = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute), Number(second)));
+  if (wallClock.getUTCFullYear() !== Number(year) || wallClock.getUTCMonth() !== Number(month) - 1 || wallClock.getUTCDate() !== Number(day) || wallClock.getUTCHours() !== Number(hour) || wallClock.getUTCMinutes() !== Number(minute) || wallClock.getUTCSeconds() !== Number(second)) invalid();
+  const normalized = value.replace(' ', 'T');
+  const zone = match[8];
+  if (!Number.isFinite(Date.parse(zone ? normalized : `${normalized}Z`))) invalid();
+  // Preserve the upstream timestamp, including any timezone if supplied.
+  // A timezone-unqualified value remains server-local; we do not guess one.
+  return value;
+}
+
+function packageStatus(row) {
+  const status = row.status;
+  if (status !== undefined && status !== null && typeof status !== 'string' && !(typeof status === 'number' && Number.isSafeInteger(status) && status >= 0 && status <= 100)) invalid();
+  const values = [row.displayStatus, typeof status === 'string' ? status : undefined].filter(value => value !== undefined && value !== null);
+  if (values.some(value => typeof value !== 'string' || value.length > 40)) invalid();
+  if (values.some(value => ['EXPIRED', 'INVALID', 'DISABLED', 'CANCELLED', 'OVERDUE', '过期', '已过期', '失效', '已失效', '已禁用', '已停用'].includes(value.toUpperCase()))) return 'expired';
+  if (values.some(value => ['ACTIVE', 'EFFECTIVE', 'VALID', 'NORMAL', '有效', '生效', '已生效', '生效中', '正常'].includes(value.toUpperCase()))) return 'active';
+  return 'unknown';
+}
+
+/** Parse one fixed-size page from GLM's Standard API resource-package endpoint.
+ * Only display-safe fields are retained; account, order and token identifiers
+ * from upstream rows are deliberately discarded.
+ */
+export function parseGlmResourcePackagePage(json) {
+  if (!object(json) || json.code !== 200 || !Array.isArray(json.rows)) invalid();
+  const total = standardCount(json.total);
+  if (json.rows.length > 50 || json.rows.length > total) invalid();
+  const packages = json.rows.map(row => {
+    if (!object(row)) invalid();
+    const consumeType = row.consumeType;
+    if (consumeType !== 'TOKENS' && consumeType !== 'TIMES') invalid();
+    const totalAmount = standardCount(row.tokensMagnitude);
+    const remaining = standardCount(row.availableBalance);
+    if (remaining > totalAmount) invalid();
+    const metric = {
+      type: 'resource-package',
+      name: packageText(row.resourcePackageName, { required: true }),
+      remaining,
+      total: totalAmount,
+      unit: consumeType === 'TOKENS' ? 'tokens' : 'requests',
+      status: packageStatus(row),
+    };
+    const expirationTime = packageExpiration(row.expirationTime);
+    const suitableModel = packageText(row.suitableModel);
+    const suitableScene = packageText(row.suitableScene);
+    const frozen = row.frozenBalance === undefined || row.frozenBalance === null ? undefined : standardCount(row.frozenBalance);
+    if (expirationTime) metric.expirationTime = expirationTime;
+    if (suitableModel) metric.suitableModel = suitableModel;
+    if (suitableScene) metric.suitableScene = suitableScene;
+    if (frozen !== undefined) metric.frozen = frozen;
+    return metric;
+  });
+  return { total, packages };
+}
+
+/** Normalize the domestic GLM Standard API account-balance envelope. */
+export function parseGlmStandardBalance(json) {
+  if (!object(json) || json.code !== 200 || json.success !== true || !object(json.data)) invalid();
+  const data = json.data;
+  const available = data.availableBalance ?? data.balance;
+  const metric = { type: 'balance', currency: 'CNY', amount: standardMoney(available), wallet: 'glm-standard' };
+  if (data.balance !== undefined && data.balance !== null) metric.accountBalance = standardMoney(data.balance);
+  const fields = [
+    ['rechargeAmount', 'recharge'],
+    ['giveAmount', 'granted'],
+    ['totalSpendAmount', 'spent'],
+    ['frozenBalance', 'frozen'],
+  ];
+  for (const [source, target] of fields) {
+    const value = optionalStandardMoney(data, source);
+    if (value !== undefined) metric[target] = value;
+  }
+  return metric;
 }

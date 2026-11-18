@@ -86,7 +86,8 @@ async function pageJson(response, signal) {
 }
 
 /** now is a Unix-millisecond number; amount remains month-to-date for the agent
- * tool, while ranges/daily cover complete UTC days only, ending yesterday.
+ * tool, 0d covers today's partial UTC day through now, and 1d/7d/30d cover
+ * complete UTC days ending yesterday. daily remains the 30-day complete history.
  * All pages share ONE 25s deadline. Any incomplete/invalid page rejects the
  * entire result; amounts from earlier pages are never returned as a total.
  */
@@ -109,7 +110,7 @@ export async function queryOpenAICosts({ key, fetcher = fetch, now = Date.now(),
   const startSec = Math.floor(queryStart / 1000);
   const periodStartSec = Math.floor(periodStart / 1000);
   const shared = { type: 'spend', periodStart, periodEnd, timezone: 'UTC', scope: 'organization' };
-  const rangeDays = [['1d', 1], ['7d', 7], ['30d', 30]];
+  const rangeDays = [['0d', 0], ['1d', 1], ['7d', 7], ['30d', 30]];
   if (endSec <= startSec) {
     if (signal?.aborted) throw error('timeout');
     const daily = Array.from({ length: historyDays }, (_, index) => ({ date: historyStart + index * dayMs, amount: '0', hasRecords: false }));
@@ -124,6 +125,10 @@ export async function queryOpenAICosts({ key, fetcher = fetch, now = Date.now(),
   const dailyRecords = new Set();
   const dailyPerKey = new Map();
   const dailyProjectsByKey = new Map();
+  const todaySums = new Map();
+  const todayRecords = new Set();
+  const todayPerKey = new Map();
+  const todayProjectsByKey = new Map();
   const cursors = new Set();
   const buckets = new Set();
   let cursor;
@@ -165,6 +170,19 @@ export async function queryOpenAICosts({ key, fetcher = fetch, now = Date.now(),
         const currency = result.amount.currency.toUpperCase();
         const amount = decimal(result.amount.value);
         const day = Math.floor(bucket.start_time * 1000 / dayMs) * dayMs;
+        if (day === historyEnd) {
+          todaySums.set(currency, add(todaySums.get(currency) ?? { integer: 0n, scale: 0 }, amount));
+          todayRecords.add(currency);
+          if (groupByApiKey) {
+            const keySlot = `${currency}\u0000${result.api_key_id ?? ''}`;
+            todayPerKey.set(keySlot, add(todayPerKey.get(keySlot) ?? { integer: 0n, scale: 0 }, amount));
+            if (result.api_key_id && result.project_id) {
+              let projects = todayProjectsByKey.get(keySlot);
+              if (!projects) todayProjectsByKey.set(keySlot, projects = new Set());
+              projects.add(result.project_id);
+            }
+          }
+        }
         if (day >= historyStart && day < historyEnd) {
           const dailySlot = `${currency}\u0000${day}`;
           dailySums.set(dailySlot, add(dailySums.get(dailySlot) ?? { integer: 0n, scale: 0 }, amount));
@@ -212,7 +230,7 @@ export async function queryOpenAICosts({ key, fetcher = fetch, now = Date.now(),
     })
     .sort((a, b) => Number(b.amount) - Number(a.amount) || a.currency.localeCompare(b.currency) || (a.apiKeyId ?? '').localeCompare(b.apiKeyId ?? ''));
   const breakdown = groupByApiKey ? toBreakdown(perKey, projectsByKey) : undefined;
-  const currencies = new Set([...sums.keys(), ...[...dailySums.keys()].map(slot => slot.split('\u0000')[0])]);
+  const currencies = new Set([...sums.keys(), ...[...dailySums.keys()].map(slot => slot.split('\u0000')[0]), ...todaySums.keys()]);
   if (!currencies.size) currencies.add('USD');
   return [...currencies].sort((a, b) => a.localeCompare(b)).map(currency => {
     const daily = Array.from({ length: historyDays }, (_, index) => {
@@ -222,6 +240,16 @@ export async function queryOpenAICosts({ key, fetcher = fetch, now = Date.now(),
       return { date, amount: format(value), hasRecords: dailyRecords.has(slot) };
     });
     const ranges = Object.fromEntries(rangeDays.map(([name, days]) => {
+      if (days === 0) {
+        const currencyPrefix = `${currency}\u0000`;
+        const rangePerKey = new Map([...todayPerKey].filter(([slot]) => slot.startsWith(currencyPrefix)));
+        const rangeProjects = new Map([...todayProjectsByKey].filter(([slot]) => slot.startsWith(currencyPrefix)));
+        return [name, {
+          amount: format(todaySums.get(currency) ?? { integer: 0n, scale: 0 }),
+          ...(!todayRecords.has(currency) ? { noRecords: true } : {}),
+          ...(groupByApiKey ? { breakdown: toBreakdown(rangePerKey, rangeProjects) } : {}),
+        }];
+      }
       const rangeStart = historyEnd - days * dayMs;
       let total = { integer: 0n, scale: 0 };
       let hasRecords = false;

@@ -1,5 +1,6 @@
 // Native DSH OAuth grant only. Never read CLI files, refresh tokens or mutate grants.
-// Usage endpoint/schema reference: https://github.com/steipete/CodexBar/blob/main/docs/codex.md
+// Official endpoint/schema: https://github.com/openai/codex/tree/a05444bbeb6bb07f2875fff0143f2e4cba994463/codex-rs/backend-client
+// Credit fields: codex-rs/codex-backend-openapi-models/src/models/credit_status_details.rs.
 // This is a ChatGPT/Codex subscription probe, NOT the OpenAI API balance/cost API.
 const RECORD_KEY = 'llm-pi-ai/openai-codex';
 const ENDPOINT = 'https://chatgpt.com/backend-api/wham/usage';
@@ -38,8 +39,29 @@ export async function resolveNativeCodexCredential(credentials, { now = Date.now
   }
 }
 
-/** Normalize only the main subscription windows; model-specific limits and
- * credits are intentionally omitted. Window positions are not semantic labels.
+/** Optional credit metadata never invalidates otherwise valid main windows.
+ * Credits are account usage units, not API dollars or reset-credit vouchers.
+ * Missing flags/balance are not numbers; preserve explicit zero/negative and
+ * decimal precision without coercion. Unrelated/private fields are never read.
+ */
+function codexCreditMetric(json) {
+  const unknown = { type: 'credits', unit: 'credits', state: 'unknown' };
+  try {
+    const credits = json.credits;
+    if (!object(credits)) return unknown;
+    const hasCredits = credits.has_credits;
+    const unlimited = credits.unlimited;
+    if (typeof hasCredits !== 'boolean' || typeof unlimited !== 'boolean') return unknown;
+    if (unlimited === true) return { ...unknown, state: 'unlimited' };
+    const balance = credits.balance;
+    if (balance === undefined || balance === null) return { ...unknown, state: hasCredits ? 'available' : 'unavailable' };
+    if (typeof balance !== 'string' || balance.length > 128 || balance.trim() !== balance || !/^-?\d+(?:\.\d+)?$/.test(balance)) return unknown;
+    return { ...unknown, state: 'balance', amount: balance };
+  } catch { return unknown; }
+}
+
+/** Normalize the main subscription windows and append one isolated credit metric.
+ * Model-specific limits are omitted. Window positions are not semantic labels.
  */
 export function parseCodexUsage(json) {
   if (!object(json) || !object(json.rate_limit)) invalid();
@@ -63,7 +85,9 @@ export function parseCodexUsage(json) {
     metrics.push(metric);
   }
   if (!metrics.length) invalid();
-  return metrics.sort((left, right) => (left.durationSeconds ?? Infinity) - (right.durationSeconds ?? Infinity));
+  metrics.sort((left, right) => (left.durationSeconds ?? Infinity) - (right.durationSeconds ?? Infinity));
+  metrics.push(codexCreditMetric(json));
+  return metrics;
 }
 
 function cancelBody(body) {

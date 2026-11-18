@@ -10,6 +10,34 @@ export function validateColorThresholds(value = DEFAULT_COLOR_THRESHOLDS) {
   return { greenMin, orangeMin };
 }
 
+function normalizeAliasDomain(value) {
+  if (typeof value !== 'string' || !value || value.length > 253 || value.trim() !== value || value.includes(':')) fail('invalid-domain-aliases');
+  let parsed;
+  try { parsed = new URL(`https://${value}/`); }
+  catch { fail('invalid-domain-aliases'); }
+  const host = parsed.hostname.toLowerCase().replace(/\.$/, '');
+  const labels = host.split('.');
+  const numericAddress = labels.length === 4 && labels.every(label => label.length > 0 && [...label].every(character => character >= '0' && character <= '9'));
+  if (!host || parsed.username || parsed.password || parsed.port || parsed.host !== parsed.hostname || parsed.pathname !== '/' || parsed.search || parsed.hash || host.startsWith('[') || numericAddress || labels.length < 2 || labels.some(label => !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(label))) fail('invalid-domain-aliases');
+  return host;
+}
+
+export function validateCompanyDomainAliases(value = []) {
+  if (!Array.isArray(value) || value.length > 20) fail('invalid-domain-aliases');
+  const labels = new Set();
+  const domains = new Set();
+  return value.map(alias => {
+    if (!alias || typeof alias !== 'object' || Array.isArray(alias) || Object.keys(alias).some(key => !['label', 'domains'].includes(key))) fail('invalid-domain-aliases');
+    const label = typeof alias.label === 'string' ? alias.label.trim() : '';
+    if (!label || label.length > 80 || /[|\r\n]/.test(label) || labels.has(label.toLocaleLowerCase()) || !Array.isArray(alias.domains) || alias.domains.length < 1 || alias.domains.length > 20) fail('invalid-domain-aliases');
+    labels.add(label.toLocaleLowerCase());
+    const roots = alias.domains.map(normalizeAliasDomain);
+    if (new Set(roots).size !== roots.length || roots.some(domain => domains.has(domain))) fail('invalid-domain-aliases');
+    for (const domain of roots) domains.add(domain);
+    return { label, domains: roots };
+  });
+}
+
 export class QuotaColorSettings {
   constructor(value, persist) {
     this.value = validateColorThresholds(value);
@@ -23,6 +51,24 @@ export class QuotaColorSettings {
   }
   async save(value) {
     const validated = validateColorThresholds(value);
+    if (typeof this.persist !== 'function') fail('settings-unavailable');
+    try { await this.persist(validated); }
+    catch (cause) {
+      fail(typeof cause?.code === 'string' && /conflict/i.test(cause.code) ? 'settings-conflict' : 'save-failed');
+    }
+    this.value = validated;
+    return { ...this.read(), saved: true };
+  }
+}
+
+export class CompanyDomainAliasSettings {
+  constructor(value = [], persist) {
+    this.value = validateCompanyDomainAliases(value);
+    this.persist = persist;
+  }
+  read() { return { domainAliases: this.value.map(alias => ({ ...alias, domains: [...alias.domains] })), writable: typeof this.persist === 'function' }; }
+  async save(value) {
+    const validated = validateCompanyDomainAliases(value);
     if (typeof this.persist !== 'function') fail('settings-unavailable');
     try { await this.persist(validated); }
     catch (cause) {

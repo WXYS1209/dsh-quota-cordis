@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { DEFAULT_COLOR_THRESHOLDS, validateColorThresholds, QuotaColorSettings } from '../quota-settings.js';
+import { DEFAULT_COLOR_THRESHOLDS, validateColorThresholds, validateCompanyDomainAliases, QuotaColorSettings, CompanyDomainAliasSettings } from '../quota-settings.js';
 import { apply } from '../index.js';
 
 function fixture() {
@@ -51,6 +51,29 @@ test('invalid, equal, fractional, empty or color-changing threshold payloads can
   for (const value of [null, [], {}, { greenMin: '75', orangeMin: 25 }, { greenMin: 75, orangeMin: '' }, { greenMin: 25, orangeMin: 25 }, { greenMin: 10, orangeMin: 20 }, { greenMin: 101, orangeMin: 25 }, { greenMin: 75, orangeMin: -1 }, { greenMin: 75.5, orangeMin: 25 }, { greenMin: NaN, orangeMin: 25 }, { greenMin: 75, orangeMin: 25, greenColor: 'blue' }]) assert.throws(() => validateColorThresholds(value), /invalid-thresholds/);
 });
 
+test('company domain aliases normalize hosts and reject ambiguous or unsafe inputs', () => {
+  assert.deepEqual(validateCompanyDomainAliases([{ label: '  Brand  ', domains: ['API.Example.com.', 'other.example.net'] }]), [
+    { label: 'Brand', domains: ['api.example.com', 'other.example.net'] },
+  ]);
+  for (const value of [
+    null, {}, [{ label: 'Brand', domains: [] }], [{ label: '', domains: ['example.com'] }],
+    [{ label: 'Brand', domains: ['example.com', 'EXAMPLE.COM'] }],
+    [{ label: 'Brand', domains: ['example.com'] }, { label: ' brand ', domains: ['example.net'] }],
+    [{ label: 'Brand', domains: ['https://example.com/path'] }], [{ label: 'Brand', domains: ['127.0.0.1'] }],
+    [{ label: 'Brand', domains: ['example.com:443'] }], [{ label: 'Brand|Other', domains: ['example.com'] }],
+    [{ label: 'Brand\nOther', domains: ['example.com'] }], [{ label: 'Brand', domains: ['example.com'], extra: true }],
+  ]) assert.throws(() => validateCompanyDomainAliases(value), /invalid-domain-aliases/);
+});
+
+test('company domain alias settings do not claim a failed write or mutate stored state', async () => {
+  const readonly = new CompanyDomainAliasSettings();
+  assert.equal(readonly.read().writable, false);
+  await assert.rejects(readonly.save([{ label: 'Brand', domains: ['example.com'] }]), /settings-unavailable/);
+  const failed = new CompanyDomainAliasSettings([], async () => { throw Error('private-profile-content'); });
+  await assert.rejects(failed.save([{ label: 'Brand', domains: ['example.com'] }]), error => error.message === 'save-failed');
+  assert.deepEqual(failed.read().domainAliases, []);
+});
+
 test('settings cannot claim saved when storage is unavailable or rejects a write', async () => {
   const readonly = new QuotaColorSettings();
   assert.equal(readonly.read().writable, false);
@@ -86,6 +109,44 @@ test('settings page and agent share threshold validation and successful persiste
   assert.deepEqual(await invalid.json(), { error: 'invalid-thresholds' });
   assert.deepEqual(await h.tool.execute({ action: 'set', greenMin: 10, orangeMin: 20 }), { ok: false, error: 'invalid-thresholds' });
   assert.equal(h.state.saves, 1);
+}));
+
+test('domain alias settings persist through configEditor, survive reread, and merge with color settings', async () => using(async h => {
+  const initial = await h.browser();
+  assert.deepEqual(initial.domainAliases, []);
+  const aliases = [{ label: 'Acme', domains: ['api.acme.example', 'acme-ai.example'] }];
+  const response = await h.post({ action: 'saveDomainAliases', domainAliases: aliases }, initial.csrf);
+  assert.equal(response.status, 200);
+  const saved = await response.json();
+  assert.equal(saved.saved, true);
+  assert.equal(saved.savedItem, 'domainAliases');
+  assert.deepEqual(saved.domainAliases, aliases);
+  assert.deepEqual(h.state.config.domainAliases, aliases);
+  assert.deepEqual((await h.browser()).domainAliases, aliases);
+  const colors = await h.post({ greenMin: 80, orangeMin: 20 }, saved.csrf);
+  assert.equal(colors.status, 200);
+  assert.deepEqual(h.state.config, { unrelated: { keep: true }, domainAliases: aliases, colorThresholds: { greenMin: 80, orangeMin: 20 } });
+  assert.equal(h.state.saves, 2);
+}));
+
+test('domain alias API validates CSRF, payload shape, and configuration conflicts', async () => using(async h => {
+  const initial = await h.browser();
+  const missingCsrf = await h.post({ action: 'saveDomainAliases', domainAliases: [{ label: 'Brand', domains: ['example.com'] }] }, undefined);
+  assert.equal(missingCsrf.status, 403);
+  const invalid = await h.post({ action: 'saveDomainAliases', domainAliases: [{ label: 'Brand', domains: ['https://example.com/path'] }] }, initial.csrf);
+  assert.equal(invalid.status, 400);
+  assert.deepEqual(await invalid.json(), { error: 'invalid-domain-aliases' });
+  const missingValue = await h.post({ action: 'saveDomainAliases' }, initial.csrf);
+  assert.equal(missingValue.status, 400);
+  const extra = await h.post({ action: 'saveDomainAliases', domainAliases: [], unexpected: true }, initial.csrf);
+  assert.equal(extra.status, 400);
+  h.state.error = Object.assign(new Error('private profile path'), { code: 'CONFIG_CONFLICT' });
+  const conflict = await h.post({ action: 'saveDomainAliases', domainAliases: [{ label: 'Brand', domains: ['example.com'] }] }, initial.csrf);
+  assert.equal(conflict.status, 409);
+  const conflictBody = await conflict.json();
+  assert.deepEqual(conflictBody, { error: 'settings-conflict' });
+  assert.equal(h.state.saves, 0);
+  assert.equal(JSON.stringify(conflictBody).includes('private profile path'), false);
 }));
 
 test('forged settings requests cannot change profile values', async () => using(async h => {

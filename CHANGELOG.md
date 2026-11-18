@@ -1,6 +1,17 @@
 # Changelog
 
-All notable changes are documented here. Dates are UTC.
+All notable changes are documented here. Release 0.7.3 uses Asia/Shanghai (UTC+08:00); earlier entries retain their recorded UTC dates.
+
+## 0.7.3 — 2026-11-19
+
+- Add company-grouped provider/model management with inline editing, folded connection settings, model search and a discovery dialog; selection remains explicit and changes require Save.
+- Expand company coverage to 29 families with local marks/search and reviewed rule updates. Sort saved settings/authentication first, then localized names, with unknown endpoints last; include native DeepSeek account/API-key routes.
+- Fix Host endpoint metadata and SDK schema-method handling. DeepSeek grouping and quota checks share validated endpoint resolution; invalid, uncertain or relay routes cannot trigger official balance probes or expose old official balances.
+- Add UTC today-to-date OpenAI spend alongside yesterday and 7d/30d windows, with matching API-key breakdowns, including single-key results.
+- Add domestic GLM Standard API balance/resource packages as Preview with bounded official-endpoint queries; international Standard API remains status-only.
+- Display Codex Credits separately with precise stored values, compact two-decimal presentation and distinct unavailable/unknown states; Credits remain Preview pending live-account validation.
+- Build Codex login into this plugin using DSH native authorization, without an extra OAuth UI plugin. Login remains explicitly user-triggered and is safely disabled when the native capability is missing; source/synthetic coverage does not constitute new live-account OAuth acceptance.
+- Retain DSH compatibility `>=0.2.2-rc.1 <0.2.3-0`, recommend the rc.5 audit baseline, refresh its public catalog and unify version reporting. New source/synthetic checks do not replace historical live-account acceptance or re-test every older SDK.
 
 ## 0.7.2 — 2026-11-16
 

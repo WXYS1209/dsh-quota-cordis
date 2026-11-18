@@ -9,6 +9,8 @@ const fixture = { rate_limit: {
   primary_window: { used_percent: 0, limit_window_seconds: 18000, reset_at: 1_794_290_000 },
   secondary_window: { used_percent: 42.5, limit_window_seconds: 604800, reset_at: 1_794_800_000 },
 }, account_id: 'PRIVATE_ID', plan_type: 'PRIVATE_PLAN', credits: { balance: 123 } };
+const windows = metrics => metrics.filter(metric => metric.type === 'quota-window');
+const creditMetric = credits => parseCodexUsage({ ...fixture, credits }).at(-1);
 const isCode = expected => cause => cause instanceof Error && cause.code === expected && cause.message === expected && cause.cause === undefined;
 const grant = payload => ({ kind: 'grant', payload: { type: 'oauth', ...credential, ...payload } });
 const nextTurn = () => new Promise(resolve => setImmediate(resolve));
@@ -70,28 +72,88 @@ test('expiry is Unix milliseconds with a strict thirty-second safety margin and 
 
 test('main windows preserve true zero, convert epoch seconds and omit private metadata', () => {
   const metrics = parseCodexUsage(fixture);
-  assert.deepEqual(metrics, [
+  assert.deepEqual(windows(metrics), [
     { type: 'quota-window', label: 'rolling', unit: 'percent', usedPercent: 0, durationSeconds: 18000, resetsAt: 1_794_290_000_000 },
     { type: 'quota-window', label: 'weekly', unit: 'percent', usedPercent: 42.5, durationSeconds: 604800, resetsAt: 1_794_800_000_000 },
   ]);
+  assert.deepEqual(metrics.at(-1), { type: 'credits', unit: 'credits', state: 'unknown' });
   assert.equal(JSON.stringify(metrics).includes('PRIVATE'), false);
 });
 
 test('window semantics and sorting follow duration rather than primary/secondary position', () => {
   const swapped = { rate_limit: { primary_window: fixture.rate_limit.secondary_window, secondary_window: fixture.rate_limit.primary_window } };
   assert.deepEqual(parseCodexUsage(swapped), parseCodexUsage(fixture));
-  assert.deepEqual(parseCodexUsage({ rate_limit: { primary_window: { used_percent: 100, limit_window_seconds: 2592000 } } }), [
+  assert.deepEqual(windows(parseCodexUsage({ rate_limit: { primary_window: { used_percent: 100, limit_window_seconds: 2592000 } } })), [
     { type: 'quota-window', label: 'quota', unit: 'percent', usedPercent: 100, durationSeconds: 2592000 },
   ]);
-  assert.deepEqual(parseCodexUsage({ rate_limit: { secondary_window: { used_percent: 8 } } }), [
+  assert.deepEqual(windows(parseCodexUsage({ rate_limit: { secondary_window: { used_percent: 8 } } })), [
     { type: 'quota-window', label: 'quota', unit: 'percent', usedPercent: 8 },
   ]);
+});
+
+test('credits preserve signed decimal strings, explicit zero and precision without numeric coercion', () => {
+  for (const balance of ['0', '-0', '0.0000', '-0.0000', '123.4500', '-42.0050', '000123.4500', '123456789012345678901234567890.12345678901234567890', '9'.repeat(128)]) {
+    for (const has_credits of [true, false]) assert.deepEqual(creditMetric({ has_credits, unlimited: false, balance }), { type: 'credits', unit: 'credits', state: 'balance', amount: balance });
+  }
+});
+
+test('unlimited credits take priority without reading a balance, but both flags must be actual booleans', () => {
+  for (const has_credits of [true, false]) {
+    const credits = { has_credits, unlimited: true };
+    Object.defineProperty(credits, 'balance', { get() { throw Error('UNLIMITED_BALANCE_MUST_NOT_BE_READ'); } });
+    assert.deepEqual(creditMetric(credits), { type: 'credits', unit: 'credits', state: 'unlimited' });
+  }
+  for (const credits of [{ has_credits: 'true', unlimited: true }, { has_credits: false, unlimited: 'true' }, { unlimited: true }]) {
+    assert.deepEqual(creditMetric(credits), { type: 'credits', unit: 'credits', state: 'unknown' });
+  }
+});
+
+test('availability flags with absent or null balances do not fabricate a zero credit amount', () => {
+  for (const balance of [undefined, null]) for (const has_credits of [true, false]) {
+    assert.deepEqual(creditMetric({ has_credits, unlimited: false, balance }), { type: 'credits', unit: 'credits', state: has_credits ? 'available' : 'unavailable' });
+  }
+  assert.deepEqual(creditMetric({ has_credits: true, unlimited: false }), { type: 'credits', unit: 'credits', state: 'available' });
+  assert.deepEqual(creditMetric({ has_credits: false, unlimited: false }), { type: 'credits', unit: 'credits', state: 'unavailable' });
+});
+
+test('missing, null and malformed credit metadata stays independently unknown without failing valid quota windows', () => {
+  const unknown = { type: 'credits', unit: 'credits', state: 'unknown' };
+  for (const credits of [undefined, null, [], false, 0, 'PRIVATE_CREDITS', {}, { balance: '25' },
+    { has_credits: true }, { has_credits: 'false', unlimited: false }, { has_credits: 1, unlimited: false },
+    { has_credits: null, unlimited: false }, { has_credits: false, unlimited: 0 }]) {
+    const metrics = parseCodexUsage({ ...fixture, credits });
+    assert.equal(windows(metrics).length, 2);
+    assert.deepEqual(metrics.at(-1), unknown);
+  }
+  for (const balance of [0, -1, 12.5, NaN, Infinity, false, [], {}, '', ' ', '\t', '+1', '1e3', '--1', '.5', '1.', '1.2.3', '1_000', '1,000', '12 credits', 'NaN', 'Infinity', ' 1', '1 ', '1\n', '9'.repeat(129)]) {
+    assert.deepEqual(creditMetric({ has_credits: true, unlimited: false, balance }), unknown);
+  }
+  const throwingCredits = { ...fixture };
+  Object.defineProperty(throwingCredits, 'credits', { get() { throw Error('PRIVATE_ERROR'); } });
+  assert.deepEqual(parseCodexUsage(throwingCredits).at(-1), unknown);
+  assert.deepEqual(parseCodexUsage({ rate_limit: fixture.rate_limit }).at(-1), unknown);
+});
+
+test('credit normalization only returns the allowlisted state and amount, never private or reset-credit fields', () => {
+  const credits = Object.freeze({ has_credits: true, unlimited: false, balance: '-12.3400',
+    approx_local_messages: ['PRIVATE_LOCAL'], approx_cloud_messages: ['PRIVATE_CLOUD'], account_id: 'PRIVATE_CREDIT_ACCOUNT', currency: 'USD', reset_at: 123 });
+  const json = Object.freeze({ ...fixture, credits, email: 'PRIVATE_EMAIL', rate_limit_reset_credits: { available_count: 999, credits: ['PRIVATE_RESET'] } });
+  const metrics = parseCodexUsage(json);
+  assert.deepEqual(metrics.at(-1), { type: 'credits', unit: 'credits', state: 'balance', amount: '-12.3400' });
+  assert.equal(JSON.stringify(metrics).includes('PRIVATE'), false);
+  assert.equal(JSON.stringify(metrics).includes('USD'), false);
+  assert.equal(metrics.filter(metric => metric.type === 'credits').length, 1);
+  const ignored = { has_credits: true, unlimited: false, balance: '5' };
+  for (const field of ['approx_local_messages', 'approx_cloud_messages', 'account_id', 'currency']) Object.defineProperty(ignored, field, { get() { throw Error('MUST_NOT_READ'); } });
+  assert.equal(creditMetric(ignored).amount, '5');
 });
 
 test('missing windows and additional model limits never fabricate a zero main quota', () => {
   for (const value of [undefined, null, [], {}, { rate_limit: null }, { rate_limit: {} }, { rate_limit: { primary_window: null } },
     { rate_limit: { unknown_window: { used_percent: 0 } } },
     { additional_rate_limits: [{ rate_limit: fixture.rate_limit }] },
+    { credits: { has_credits: true, unlimited: false, balance: '100' } },
+    { rate_limit: {}, credits: { has_credits: true, unlimited: true } },
   ]) assert.throws(() => parseCodexUsage(value), isCode('invalid-response'));
 });
 
@@ -124,11 +186,34 @@ test('query fixes endpoint, method and redirect policy; returns normalized metri
   assert.equal(JSON.stringify(metrics).includes(credential.accountId), false);
 });
 
+test('credits use the same single account-scoped GET and never initiate an extra balance request', async () => {
+  let calls = 0;
+  const metrics = await queryCodexUsage({ credential, fetcher: async (url, options) => {
+    calls++;
+    assert.equal(url, 'https://chatgpt.com/backend-api/wham/usage');
+    assert.equal(options.method, 'GET');
+    assert.equal(options.body, undefined);
+    assert.equal(options.redirect, 'error');
+    assert.equal(options.headers.Authorization, `Bearer ${credential.access}`);
+    assert.equal(options.headers['ChatGPT-Account-Id'], credential.accountId);
+    return response({ ...fixture, credits: { has_credits: true, unlimited: false, balance: '-1.2500' } });
+  } });
+  assert.equal(calls, 1);
+  assert.equal(windows(metrics).length, 2);
+  assert.deepEqual(metrics.at(-1), { type: 'credits', unit: 'credits', state: 'balance', amount: '-1.2500' });
+});
+
 test('simultaneous account queries keep access and account headers isolated', async () => {
   const requests = [];
   const other = { ...credential, access: 'MOCK_ACCESS_B', accountId: 'mock-account-b' };
-  const fetcher = async (_url, options) => { requests.push(options.headers); await nextTurn(); return response(); };
-  await Promise.all([queryCodexUsage({ credential, fetcher }), queryCodexUsage({ credential: other, fetcher })]);
+  const fetcher = async (_url, options) => {
+    requests.push(options.headers);
+    await nextTurn();
+    return response({ ...fixture, credits: { has_credits: true, unlimited: false, balance: options.headers['ChatGPT-Account-Id'] === credential.accountId ? '25.5000' : '93.0001' } });
+  };
+  const [first, second] = await Promise.all([queryCodexUsage({ credential, fetcher }), queryCodexUsage({ credential: other, fetcher })]);
+  assert.equal(first.at(-1).amount, '25.5000');
+  assert.equal(second.at(-1).amount, '93.0001');
   assert.deepEqual(requests.map(headers => [headers.Authorization, headers['ChatGPT-Account-Id']]), [
     [`Bearer ${credential.access}`, credential.accountId], [`Bearer ${other.access}`, other.accountId],
   ]);

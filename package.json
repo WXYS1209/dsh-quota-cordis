@@ -1,7 +1,7 @@
 {
   "name": "dsh-quota-cordis",
-  "version": "0.7.2",
-  "description": "Provider balances, subscription quotas and OpenAI API spend for DeepSeek Harness",
+  "version": "0.7.3",
+  "description": "Provider quotas, OpenAI spend and company-grouped model management for DeepSeek Harness",
   "license": "MIT",
   "repository": { "type": "git", "url": "git+https://github.com/WXYS1209/dsh-quota-cordis.git" },
   "homepage": "https://github.com/WXYS1209/dsh-quota-cordis#readme",
@@ -14,16 +14,16 @@
     "./locale/*.json": "./locale/*.json",
     "./icon": "./icon.svg"
   },
-  "files": ["index.js", "manager.js", "adapters.js", "openai-admin.js", "openai-costs.js", "openai-key-names.js", "codex-usage.js", "opencode-usage.js", "quota-settings.js", "client.js", "cordis.patch.yml", "locale/*.json", "icon.svg", "README.md", "README.zh.md", "CHANGELOG.md", "SECURITY.md", "LICENSE"],
-  "scripts": {"test": "node --test", "check": "node --check index.js && node --check manager.js && node --check adapters.js && node --check openai-admin.js && node --check openai-costs.js && node --check openai-key-names.js && node --check codex-usage.js && node --check opencode-usage.js && node --check quota-settings.js && node --check client.js"},
-  "engines": {"dsh": ">=0.2.2-rc.1 <0.2.3"},
+  "files": ["index.js", "manager.js", "version.js", "route-hosts.js", "company-rules.js", "company-rules-storage.js", "company-rules.json", "company-brand-marks.js", "company-brand-marks.json", "scripts/sync-company-rules.js", "scripts/sync-company-brand-marks.js", "adapters.js", "openai-admin.js", "openai-costs.js", "openai-key-names.js", "codex-usage.js", "codex-oauth.js", "opencode-usage.js", "quota-settings.js", "client.js", "public_suffix_list.dat", "LICENSES/MPL-2.0.txt", "LICENSES/CC0-1.0.txt", "LICENSES/LobeHub-MIT.txt", "LICENSES/Earendil-Pi-MIT.txt", "LICENSES/BRAND-MARKS.md", "cordis.patch.yml", "locale/*.json", "icon.svg", "README.md", "README.zh.md", "CHANGELOG.md", "SECURITY.md", "docs/COMPANY_COVERAGE.md", "LICENSE"],
+  "scripts": {"test": "node --test", "test:company-coverage": "node --test test/company-catalog-coverage.test.js", "sync:company-rules": "node scripts/sync-company-rules.js", "check:company-rules": "node scripts/sync-company-rules.js --check", "sync:company-brand-marks": "node scripts/sync-company-brand-marks.js", "check:company-brand-marks": "node scripts/sync-company-brand-marks.js --check", "check": "node --check company-brand-marks.js && node --check company-rules.js && node --check company-rules-storage.js && node --check index.js && node --check manager.js && node --check version.js && node --check route-hosts.js && node --check adapters.js && node --check openai-admin.js && node --check openai-costs.js && node --check openai-key-names.js && node --check codex-usage.js && node --check codex-oauth.js && node --check opencode-usage.js && node --check quota-settings.js && node --check client.js && node scripts/sync-company-rules.js --check && node scripts/sync-company-brand-marks.js --check"},
+  "engines": {"dsh": ">=0.2.2-rc.1 <0.2.3-0"},
   "publishConfig": {"access": "public"},
   "dsh": {
     "bundle": {"patch": "./cordis.patch.yml"},
     "client": {
       "platform": "web",
       "immediately": true,
-      "inject": ["@deepseek-ai/dsh-client-ui-conversation", "@deepseek-ai/dsh-client-ui-settings", "@deepseek-ai/dsh-client-locale"]
+      "inject": ["@deepseek-ai/dsh-api-remotes", "@deepseek-ai/dsh-client-ui-conversation", "@deepseek-ai/dsh-client-ui-settings", "@deepseek-ai/dsh-client-locale", "configForms"]
     }
   }
 }

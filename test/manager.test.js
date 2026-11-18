@@ -224,6 +224,34 @@ test('native Base URL overrides cannot accidentally send a relay key to official
   } finally { await f.manager.dispose(); }
 });
 
+test('same-name custom DeepSeek routes need an actual endpoint before official quota probing', async () => {
+  const f = fixture({ providers: { 'deepseek-official': { apiKeyEnv: 'CUSTOM_KEY' } }, keys: { CUSTOM_KEY: 'relay-secret', DEEPSEEK_BASE_URL: 'https://relay.example/v1' } });
+  try {
+    const overridden = await f.manager.snapshot();
+    assert.equal(overridden.rows[0].kind, 'unsupported');
+    assert.equal(f.state.requests.length, 0);
+    f.state.providers['deepseek-official'].baseURL = 'https://api.deepseek.com/v1';
+    const configured = await f.manager.snapshot();
+    assert.equal(configured.rows[0].kind, 'deepseek');
+    assert.equal(configured.rows[0].status, 'ok');
+    assert.equal(f.state.requests.length, 1);
+  } finally { await f.manager.dispose(); }
+});
+
+test('a failed endpoint override read never falls back to an official quota destination', async () => {
+  const f = fixture();
+  const original = f.services.llm.listConfigurableProviders;
+  f.services.llm.listConfigurableProviders = () => original().map(row => ({ ...row, baseURLEnv: ['BROKEN_BASE_URL'] }));
+  f.services.credentials.resolve = () => { throw Error('private endpoint store failure'); };
+  try {
+    const result = await f.manager.snapshot();
+    assert.equal(result.rows[0].status, 'unsupported');
+    assert.deepEqual(result.rows[0].metrics, []);
+    assert.equal(JSON.stringify(result).includes('private endpoint store failure'), false);
+    assert.equal(f.state.requests.length, 0);
+  } finally { await f.manager.dispose(); }
+});
+
 test('GLM Coding Plan China uses its fixed official monitor host', async () => {
   const f = fixture({ providers: {
     'zai-coding-cn': { baseURL: 'https://open.bigmodel.cn/api/coding/paas/v4', apiKeyEnv: 'CN_KEY' },
@@ -240,7 +268,7 @@ test('GLM Coding Plan China uses its fixed official monitor host', async () => {
 });
 
 test('DSH built-in Z.AI Coding Plan queries the official global quota monitor with raw key auth', async () => {
-  for (const baseURL of [undefined, 'https://api.z.ai/api/paas/v4', 'https://api.z.ai/api/coding/paas/v4', 'https://api.z.ai/api/anthropic']) {
+  for (const baseURL of [undefined, 'https://api.z.ai/api/coding/paas/v4']) {
     const f = fixture({ providers: {
       zai: { baseURL, apiKeyEnv: 'ZAI_API_KEY' },
     }, keys: { ZAI_API_KEY: 'zai-plan-secret' } });
@@ -263,20 +291,86 @@ test('DSH built-in Z.AI Coding Plan queries the official global quota monitor wi
   }
 });
 
-test('custom Z.AI Standard API routes remain non-querying and link to billing', async () => {
-  for (const baseURL of ['https://api.z.ai/api/paas/v4', 'https://api.z.ai/api/coding/paas/v4', 'https://api.z.ai/custom/v1']) {
-    const f = fixture({ providers: {
-      'zai-custom': { baseURL, apiKeyEnv: 'ZAI_API_KEY' },
-    }, keys: { ZAI_API_KEY: 'zai-standard-secret' } });
-    try {
-      const result = await f.manager.snapshot();
-      assert.equal(result.rows[0].kind, 'unsupported');
-      assert.equal(result.rows[0].status, 'unsupported');
-      assert.equal(result.rows[0].reason, 'zai-api-status-only');
-      assert.equal(result.rows[0].dashboardUrl, 'https://z.ai/manage-apikey/billing');
-      assert.equal(f.state.requests.length, 0);
-    } finally { await f.manager.dispose(); }
-  }
+test('domestic GLM Standard API uses only the supplied balance and resource endpoints with Bearer auth', async () => {
+  const f = fixture({ providers: {
+    'zai-api': { baseURL: 'https://open.bigmodel.cn/api/paas/v4', apiKeyEnv: 'ZAI_API_KEY' },
+  }, keys: { ZAI_API_KEY: 'zai-standard-secret' } });
+  const balanceUrl = 'https://open.bigmodel.cn/api/biz/account/query-customer-account-report';
+  const packagesUrl = 'https://open.bigmodel.cn/api/biz/tokenAccounts/list/my?pageNum=1&pageSize=50&filterEnabled=false';
+  const payloads = {
+    [balanceUrl]: { code: 200, msg: 'ok', success: true, data: { balance: 8.66, availableBalance: 8.66, rechargeAmount: 10, giveAmount: 0.25, totalSpendAmount: 1.59, frozenBalance: 0 } },
+    [packagesUrl]: { code: 200, total: 1, rows: [{ resourcePackageName: 'Token Bundle', consumeType: 'TOKENS', tokensMagnitude: 1000, tokenBalance: 950, availableBalance: 950, status: 'EFFECTIVE', displayStatus: 'ACTIVE', expirationTime: '2026-12-11T16:17:58', suitableModel: 'GLM-4', suitableScene: 'Coding', customerId: 'customer-private', orderNo: 'order-private', tokenNo: 'token-private' }] },
+  };
+  f.manager.fetcher = async (url, options) => {
+    f.state.requests.push({ url, options });
+    return Response.json(payloads[url]);
+  };
+  try {
+    const result = await f.manager.snapshot();
+    const row = result.rows[0];
+    assert.equal(row.kind, 'glm-standard-cn');
+    assert.equal(row.status, 'ok');
+    assert.equal(row.source, 'glm-standard-api');
+    assert.deepEqual(row.metrics.map(metric => metric.type), ['balance', 'resource-package']);
+    assert.equal(row.metrics[0].amount, '8.66');
+    assert.equal(row.metrics[0].spent, '1.59');
+    assert.equal(row.metrics[1].remaining, 950);
+    assert.equal(row.metrics[1].unit, 'tokens');
+    assert.deepEqual(f.state.requests.map(request => request.url).sort(), [balanceUrl, packagesUrl].sort());
+    assert(f.state.requests.every(request => request.options.headers.Authorization === 'Bearer zai-standard-secret'));
+    const serialized = JSON.stringify(result);
+    for (const secret of ['zai-standard-secret', 'customer-private', 'order-private', 'token-private']) assert.equal(serialized.includes(secret), false);
+  } finally { await f.manager.dispose(); }
+});
+
+test('international Z.AI Standard API remains status-only without endpoint evidence', async () => {
+  const f = fixture({ providers: {
+    'zai-api': { baseURL: 'https://api.z.ai/api/paas/v4', apiKeyEnv: 'ZAI_API_KEY' },
+  }, keys: { ZAI_API_KEY: 'zai-standard-secret' } });
+  try {
+    const result = await f.manager.snapshot();
+    assert.equal(result.rows[0].kind, 'unsupported');
+    assert.equal(result.rows[0].status, 'unsupported');
+    assert.equal(result.rows[0].reason, 'zai-api-status-only');
+    assert.equal(result.rows[0].dashboardUrl, 'https://z.ai/manage-apikey/billing');
+    assert.equal(f.state.requests.length, 0);
+  } finally { await f.manager.dispose(); }
+});
+
+test('GLM Standard API package paging is bounded and validates complete page sets', async () => {
+  const f = fixture({ providers: {
+    'zai-api': { baseURL: 'https://open.bigmodel.cn/api/paas/v4', apiKeyEnv: 'ZAI_API_KEY' },
+  }, keys: { ZAI_API_KEY: 'zai-standard-secret' } });
+  const firstUrl = 'https://open.bigmodel.cn/api/biz/tokenAccounts/list/my?pageNum=1&pageSize=50&filterEnabled=false';
+  const secondUrl = 'https://open.bigmodel.cn/api/biz/tokenAccounts/list/my?pageNum=2&pageSize=50&filterEnabled=false';
+  const row = index => ({ resourcePackageName: `Bundle ${index}`, consumeType: 'TIMES', tokensMagnitude: 10, availableBalance: 5, status: 'EFFECTIVE', displayStatus: 'ACTIVE' });
+  const payloads = {
+    'https://open.bigmodel.cn/api/biz/account/query-customer-account-report': { code: 200, success: true, data: { availableBalance: 1 } },
+    [firstUrl]: { code: 200, total: 51, rows: Array.from({ length: 50 }, (_, index) => row(index + 1)) },
+    [secondUrl]: { code: 200, total: 51, rows: [row(51)] },
+  };
+  f.manager.fetcher = async (url, options) => {
+    f.state.requests.push({ url, options });
+    return Response.json(payloads[url]);
+  };
+  try {
+    const result = await f.manager.snapshot();
+    assert.equal(result.rows[0].status, 'ok');
+    assert.equal(result.rows[0].metrics.filter(metric => metric.type === 'resource-package').length, 51);
+    assert(f.state.requests.some(request => request.url === secondUrl));
+    assert(f.state.requests.every(request => request.options.headers.Authorization === 'Bearer zai-standard-secret'));
+  } finally { await f.manager.dispose(); }
+});
+
+test('an explicit Standard API URL overrides the built-in Z.AI Coding Plan route ID', async () => {
+  const f = fixture({ providers: {
+    zai: { baseURL: 'https://api.z.ai/api/paas/v4', apiKeyEnv: 'ZAI_API_KEY' },
+  }, keys: { ZAI_API_KEY: 'zai-standard-secret' } });
+  try {
+    const result = await f.manager.snapshot();
+    assert.equal(result.rows[0].reason, 'zai-api-status-only');
+    assert.equal(f.state.requests.length, 0);
+  } finally { await f.manager.dispose(); }
 });
 
 test('simultaneous consumers share a single in-flight account query', async () => {

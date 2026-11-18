@@ -2,7 +2,10 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { QuotaManager } from '../manager.js';
 
-function fixture() {
+function fixture(buckets = [{ object: 'bucket', start_time: Date.UTC(2026, 10, 1) / 1000, end_time: Date.UTC(2026, 10, 2) / 1000, results: [
+  { object: 'organization.costs.result', amount: { currency: 'usd', value: 1.25 } },
+  { object: 'organization.costs.result', amount: { currency: 'usd', value: 0.5 }, api_key_id: 'key_Example', project_id: 'proj_Example' },
+] }]) {
   const state = { now: Date.UTC(2026, 10, 5, 9, 30), admin: 'sk-admin-private-test-key', calls: 0, status: 200, reads: 0 };
   const services = {
     llm: {
@@ -29,12 +32,7 @@ function fixture() {
         const id = decodeURIComponent(parsed.pathname.slice(parsed.pathname.lastIndexOf('/') + 1));
         return Response.json({ id, object: 'organization.project.api_key', name: 'Example Name' });
       }
-      return Response.json({ object: 'page', has_more: false, next_page: null, data: [
-        { object: 'bucket', start_time: Date.UTC(2026, 10, 1) / 1000, end_time: Date.UTC(2026, 10, 2) / 1000, results: [
-          { object: 'organization.costs.result', amount: { currency: 'usd', value: 1.25 } },
-          { object: 'organization.costs.result', amount: { currency: 'usd', value: 0.5 }, api_key_id: 'key_Example', project_id: 'proj_Example' },
-        ] },
-      ] });
+      return Response.json({ object: 'page', has_more: false, next_page: null, data: buckets });
     },
   });
   return { manager, state };
@@ -50,6 +48,8 @@ test('configured official route shows separately authorized organization spend, 
     assert.equal(result.rows[0].metrics[0].scope, 'organization');
     assert.equal(result.rows[0].metrics[0].amount, '1.75');
     assert.equal(result.rows[0].metrics[0].daily.length, 30);
+    assert.equal(result.rows[0].metrics[0].ranges['0d'].amount, '0');
+    assert.equal(result.rows[0].metrics[0].ranges['0d'].noRecords, true);
     assert.equal(result.rows[0].metrics[0].ranges['1d'].amount, '0');
     assert.equal(result.rows[0].metrics[0].ranges['1d'].noRecords, true);
     assert.equal(result.rows[0].metrics[0].ranges['7d'].amount, '1.75');
@@ -64,6 +64,31 @@ test('configured official route shows separately authorized organization spend, 
     ]);
     assert.equal(JSON.stringify(result).includes(state.admin), false);
     assert.equal(JSON.stringify(result).includes('INFERENCE_KEY'), false);
+  } finally { await manager.dispose(); }
+});
+
+test('0d and 1d OpenAI spend preserve API-key detail for their selected UTC days', async () => {
+  const { manager } = fixture([
+    { object: 'bucket', start_time: Date.UTC(2026, 10, 4) / 1000, end_time: Date.UTC(2026, 10, 5) / 1000, results: [
+      { object: 'organization.costs.result', amount: { currency: 'usd', value: 0.75 }, api_key_id: 'key_Yesterday', project_id: 'proj_Example' },
+    ] },
+    { object: 'bucket', start_time: Date.UTC(2026, 10, 5) / 1000, end_time: Date.UTC(2026, 10, 6) / 1000, results: [
+      { object: 'organization.costs.result', amount: { currency: 'usd', value: 0.25 }, api_key_id: 'key_Today', project_id: 'proj_Example' },
+    ] },
+  ]);
+  try {
+    const result = await manager.snapshot();
+    const ranges = result.rows[0].metrics[0].ranges;
+    assert.equal(ranges['0d'].amount, '0.25');
+    assert.equal(ranges['0d'].noRecords, undefined);
+    assert.deepEqual(ranges['0d'].breakdown, [
+      { apiKeyId: 'key_Today', currency: 'USD', amount: '0.25', apiKeyName: 'Example Name' },
+    ]);
+    assert.equal(ranges['1d'].amount, '0.75');
+    assert.equal(ranges['1d'].noRecords, undefined);
+    assert.deepEqual(ranges['1d'].breakdown, [
+      { apiKeyId: 'key_Yesterday', currency: 'USD', amount: '0.75', apiKeyName: 'Example Name' },
+    ]);
   } finally { await manager.dispose(); }
 });
 

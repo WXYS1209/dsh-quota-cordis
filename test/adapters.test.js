@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { classifyProvider, parseDeepSeek, parseGlm, parseMiniMax } from '../adapters.js';
+import { classifyProvider, parseDeepSeek, parseGlm, parseGlmResourcePackagePage, parseGlmStandardBalance, parseMiniMax } from '../adapters.js';
 
 const quota = (limits, extra = {}) => ({ success: true, code: 200, data: { limits }, ...extra });
 const credit = (extra = {}) => ({ type: 'CREDIT_LIMIT', unit: 3, number: 5, percentage: 42, ...extra });
@@ -8,14 +8,14 @@ const fails = fn => assert.throws(fn, { message: 'invalid-response' });
 
 test('only explicit known official routes are recognized without a URL', () => {
   for (const [provider, kind] of Object.entries({
-    deepseek: 'deepseek', 'deepseek-official': 'deepseek', openai: 'openai',
+    openai: 'openai',
     zai: 'zai-coding-plan', 'zai-coding-cn': 'glm-cn', 'minimax-cn': 'minimax-cn', 'opencode-go': 'opencode-go',
   })) {
     const result = classifyProvider({ provider });
     assert.equal(result.kind, kind);
     assert.ok(result.dashboardUrl.startsWith('https://'));
   }
-  for (const provider of ['glm', 'zhipu', 'OpenAI', 'my-openai', 'deepseek-account', 'zai-standard', '__proto__', 'constructor', 'opencode', undefined]) {
+  for (const provider of ['deepseek', 'deepseek-official', 'glm', 'zhipu', 'OpenAI', 'my-openai', 'deepseek-account', 'zai-standard', '__proto__', 'constructor', 'opencode', undefined]) {
     assert.deepEqual(classifyProvider({ provider }), { kind: 'unsupported', dashboardUrl: null });
   }
   assert.deepEqual(classifyProvider({ provider: 'zai' }), { kind: 'zai-coding-plan', dashboardUrl: 'https://z.ai/manage-apikey/subscription' });
@@ -31,15 +31,24 @@ test('official HTTPS endpoint determines provider even for custom route names', 
     ['https://api.minimaxi.com/anthropic', 'minimax-cn'],
 
   ]) assert.equal(classifyProvider({ provider: 'custom', baseURL }).kind, kind);
-  for (const baseURL of [
-    'https://api.z.ai/api/paas/v4',
-    'https://api.z.ai/api/coding/paas/v4',
-    'https://api.z.ai/api/anthropic',
-  ]) assert.deepEqual(classifyProvider({ provider: 'zai', baseURL }), { kind: 'zai-coding-plan', dashboardUrl: 'https://z.ai/manage-apikey/subscription' });
   for (const [provider, baseURL] of [
-    ['custom', 'https://api.z.ai/api/coding/paas/v4'],
-    ['custom', 'https://api.z.ai/custom/v1'],
+    ['zai', 'https://api.z.ai/api/paas/v4'],
+    ['zai-api', 'https://api.z.ai/api/paas/v4'],
   ]) assert.deepEqual(classifyProvider({ provider, baseURL }), { kind: 'unsupported', dashboardUrl: 'https://z.ai/manage-apikey/billing', reason: 'zai-api-status-only' });
+  for (const [provider, baseURL] of [
+    ['custom', 'https://open.bigmodel.cn/api/paas/v4'],
+    ['zai-api', 'https://open.bigmodel.cn/api/paas/v4'],
+  ]) assert.deepEqual(classifyProvider({ provider, baseURL }), { kind: 'glm-standard-cn', dashboardUrl: null });
+  for (const [provider, baseURL, kind] of [
+    ['zai', 'https://api.z.ai/api/coding/paas/v4', 'zai-coding-plan'],
+    ['custom', 'https://api.z.ai/api/coding/paas/v4', 'zai-coding-plan'],
+    ['custom', 'https://open.bigmodel.cn/api/coding/paas/v4', 'glm-cn'],
+  ]) assert.equal(classifyProvider({ provider, baseURL }).kind, kind);
+  for (const [provider, baseURL] of [
+    ['zai', 'https://api.z.ai/api/anthropic'],
+    ['custom', 'https://api.z.ai/custom/v1'],
+    ['custom', 'https://open.bigmodel.cn/api/coding/paas/v4?model=glm-4'],
+  ]) assert.equal(classifyProvider({ provider, baseURL }).kind, 'unsupported');
   assert.deepEqual(classifyProvider({ provider: 'zai', baseURL: 'https://relay.example/v1' }), { kind: 'unsupported', dashboardUrl: null });
   assert.equal(classifyProvider({ provider: 'custom', baseURL: 'https://opencode.ai/zen/go/v1' }).kind, 'opencode-go');
   assert.equal(classifyProvider({ provider: 'custom', baseURL: 'https://opencode.ai/zen/v1' }).kind, 'unsupported');
@@ -251,4 +260,40 @@ test('MiniMax refuses unsuccessful envelopes, malformed percentages, and count-o
     if (response?.base_resp || response?.status_code) assert.throws(() => parseMiniMax(response), { message: 'upstream' });
     else fails(() => parseMiniMax(response));
   }
+});
+
+test('GLM Standard API account balance preserves supplied amounts and separates fields', () => {
+  assert.deepEqual(parseGlmStandardBalance({
+    code: 200, success: true, data: {
+      balance: 18.75, availableBalance: 8.5, rechargeAmount: 10, giveAmount: 0.25,
+      totalSpendAmount: 1.5, frozenBalance: 0,
+    },
+  }), {
+    type: 'balance', currency: 'CNY', amount: '8.5', wallet: 'glm-standard', accountBalance: '18.75',
+    recharge: '10', granted: '0.25', spent: '1.5', frozen: '0',
+  });
+  assert.deepEqual(parseGlmStandardBalance({ code: 200, success: true, data: { balance: '0.00000042' } }).amount, '0.00000042');
+  for (const response of [null, {}, { code: 200, success: false, data: {} }, { code: 500, success: true, data: {} }, { code: 200, success: true, data: { availableBalance: 'NaN' } }]) fails(() => parseGlmStandardBalance(response));
+});
+
+test('GLM Standard API packages distinguish token and request units without retaining identifiers', () => {
+  const page = parseGlmResourcePackagePage({
+    code: 200, total: 2, rows: [
+      { resourcePackageName: 'Token Bundle', consumeType: 'TOKENS', tokensMagnitude: 1000, tokenBalance: 950, availableBalance: 950, frozenBalance: 0, status: 'EFFECTIVE', displayStatus: 'ACTIVE', expirationTime: '2026-12-11T16:17:58', suitableModel: ['GLM-4'], suitableScene: 'Coding', customerId: 'private-customer', orderNo: 'private-order', tokenNo: 'private-token' },
+      { resourcePackageName: 'Request Bundle', consumeType: 'TIMES', tokensMagnitude: 20, availableBalance: 0, status: 'EXPIRED', displayStatus: 'EXPIRED', expirationTime: '2025-01-01T00:00:00' },
+    ],
+  });
+  assert.deepEqual(page, {
+    total: 2,
+    packages: [
+      { type: 'resource-package', name: 'Token Bundle', remaining: 950, total: 1000, unit: 'tokens', status: 'active', expirationTime: '2026-12-11T16:17:58', suitableModel: 'GLM-4', suitableScene: 'Coding', frozen: 0 },
+      { type: 'resource-package', name: 'Request Bundle', remaining: 0, total: 20, unit: 'requests', status: 'expired', expirationTime: '2025-01-01T00:00:00' },
+    ],
+  });
+  const safeJson = JSON.stringify(page);
+  for (const secret of ['private-customer', 'private-order', 'private-token']) assert.equal(safeJson.includes(secret), false);
+  for (const response of [null, {}, { code: 500, total: 0, rows: [] }, { code: 200, total: 2, rows: [{ resourcePackageName: 'bad', consumeType: 'OTHER', tokensMagnitude: 10, availableBalance: 1 }] }, { code: 200, total: 1, rows: [{ resourcePackageName: 'bad', consumeType: 'TIMES', tokensMagnitude: 10, availableBalance: 11 }] }, { code: 200, total: 1, rows: [{ resourcePackageName: 'bad', consumeType: 'TIMES', tokensMagnitude: 10, availableBalance: 1, expirationTime: '2026-02-30T00:00:00' }] }]) fails(() => parseGlmResourcePackagePage(response));
+  const localized = parseGlmResourcePackagePage({ code: 200, total: 1, rows: [{ resourcePackageName: 'Local time', consumeType: 'TIMES', tokensMagnitude: 10, availableBalance: 5, status: 1, displayStatus: '有效', expirationTime: '2026-12-11 16:17:58' }] });
+  assert.equal(localized.packages[0].status, 'active');
+  assert.equal(localized.packages[0].expirationTime, '2026-12-11 16:17:58');
 });

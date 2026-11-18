@@ -1,6 +1,6 @@
 {
   "meta": {
-    "title": "Provider quota",
-    "description": "Checks balances and subscription quotas for configured providers; credentials are used by the local Host only and never included in results. OpenAI organization spend requires a separate organization Admin key (an inference key cannot query it); the Admin-key setting appears only when an official OpenAI API route is configured."
+    "title": "Provider quotas",
+    "description": "View provider quotas and OpenAI spend, and manage providers and models by company."
   }
 }
