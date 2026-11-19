@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { queryOpenCodeUsage, parseOpenCodeUsage } from '../opencode-usage.js';
+import { queryOpenCodeUsage, parseOpenCodeUsage } from '../src/opencode-usage.js';
 
 const KEY = 'synthetic-opencode-key';
 const NOW = Date.UTC(2026, 11, 12, 6);

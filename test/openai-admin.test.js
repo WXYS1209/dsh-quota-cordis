@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { ADMIN_REFS, resolveOpenAIAdminKey, describeOpenAIAdminKey } from '../openai-admin.js';
+import { ADMIN_REFS, resolveOpenAIAdminKey, describeOpenAIAdminKey } from '../src/openai-admin.js';
 
 const key = 'sk-admin-fixture-secret-A';
 const other = 'sk-admin-fixture-secret-B';

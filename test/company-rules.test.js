@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { BUNDLED_COMPANY_RULES, COMPANY_RULES_URL, CompanyRulesManager, validateCompanyRules, validateCompanyRulesCache } from '../company-rules.js';
+import { BUNDLED_COMPANY_RULES, COMPANY_RULES_URL, CompanyRulesManager, validateCompanyRules, validateCompanyRulesCache } from '../src/company-rules.js';
 
 const copy = value => JSON.parse(JSON.stringify(value));
 const NOW = Date.parse('2026-11-18T10:00:00.000Z');

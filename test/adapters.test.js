@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { classifyProvider, parseDeepSeek, parseGlm, parseGlmResourcePackagePage, parseGlmStandardBalance, parseMiniMax } from '../adapters.js';
+import { classifyProvider, parseDeepSeek, parseGlm, parseGlmResourcePackagePage, parseGlmStandardBalance, parseMiniMax } from '../src/adapters.js';
 
 const quota = (limits, extra = {}) => ({ success: true, code: 200, data: { limits }, ...extra });
 const credit = (extra = {}) => ({ type: 'CREDIT_LIMIT', unit: 3, number: 5, percentage: 42, ...extra });

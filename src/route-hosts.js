@@ -107,7 +107,7 @@ function routeIdentity(entry) {
 // Configuration metadata only: no inference, model discovery or quota fetch.
 // Optional authentication presence uses public descriptors / account state only;
 // grant payloads, API-key values, account details and login attempts are not read.
-export async function readProviderRouteHosts({ llm, settings, credentials, launchEnvironment, deepseekAccount }, { signal, timeoutMs = 5000, resolveTimeoutMs = 1000 } = {}) {
+export async function readProviderRouteHosts({ llm, settings, credentials, launchEnvironment, deepseekAccount, catalogGrouping }, { signal, timeoutMs = 5000, resolveTimeoutMs = 1000 } = {}) {
   const controller = new AbortController();
   const combined = signal ? AbortSignal.any([signal, controller.signal]) : controller.signal;
   try {
@@ -176,12 +176,19 @@ export async function readProviderRouteHosts({ llm, settings, credentials, launc
       for (let index = 0; index < directory.length; index++) {
         if (combined.aborted) throw unavailable();
         const identity = identities[index];
-        let hostname = null;
+        let hostname = null, groupingHostname = null;
         if (documents.has(identity.settingsNs)) {
           try {
-            const profile = atPath(documents.get(identity.settingsNs), identity.settingsPath);
+            const document = documents.get(identity.settingsNs);
+            const profile = atPath(document, identity.settingsPath);
             const baseURL = await resolveProviderBaseURL(directory[index], profile, resolver, { launchEnvironment, resolveNativeEndpoint });
             hostname = providerRouteHostname(baseURL);
+            // Verified catalog hints may fill only a genuinely absent endpoint,
+            // never an invalid URL or an endpoint whose resolution failed.
+            if (baseURL === undefined && document && typeof document === 'object' && !Array.isArray(document)
+              && (!own(document, 'providers') || (document.providers && typeof document.providers === 'object' && !Array.isArray(document.providers)))) {
+              groupingHostname = catalogGrouping?.(directory[index], profile) ?? null;
+            }
           } catch { /* An uncertain row remains unclassified; never use its default. */ }
         }
         let authConfigured = false;
@@ -189,7 +196,7 @@ export async function readProviderRouteHosts({ llm, settings, credentials, launc
           try { authConfigured = await authenticationConfigured(directory[index], atPath(documents.get(identity.settingsNs), identity.settingsPath)); }
           catch { /* Optional presence failures must not hide a valid hostname. */ }
         }
-        routes.push({ ...identity, hostname, ...(authConfigured === true ? { authConfigured: true } : {}) });
+        routes.push({ ...identity, hostname, ...(groupingHostname ? { groupingHostname, groupingSource: 'model-catalog' } : {}), ...(authConfigured === true ? { authConfigured: true } : {}) });
       }
       return { routes };
     }, signal, timeoutMs);

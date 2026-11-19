@@ -1,5 +1,5 @@
 import { readFile, writeFile } from 'node:fs/promises';
-import { validateCompanyRules } from '../company-rules.js';
+import { validateCompanyRules } from '../src/company-rules.js';
 
 const rulesPath = new URL('../company-rules.json', import.meta.url);
 const clientPath = new URL('../client.js', import.meta.url);

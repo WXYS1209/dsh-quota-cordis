@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { CodexOAuthController } from '../codex-oauth.js';
+import { CodexOAuthController } from '../src/codex-oauth.js';
 
 const KEY = 'llm-pi-ai/openai-codex';
 const PROVIDER = 'openai-codex';

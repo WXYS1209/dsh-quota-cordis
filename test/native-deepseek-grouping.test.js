@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
-import { readProviderRouteHosts, nativeDeepSeekEndpointEnvironment } from '../route-hosts.js';
+import { readProviderRouteHosts, nativeDeepSeekEndpointEnvironment } from '../src/route-hosts.js';
 import { apply } from '../index.js';
 
 const source = await readFile(new URL('../client.js', import.meta.url), 'utf8');

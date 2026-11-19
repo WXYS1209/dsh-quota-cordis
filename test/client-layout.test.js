@@ -18,7 +18,7 @@ const normalize = value => JSON.parse(JSON.stringify(value));
 const managerStart = source.indexOf('function createProviderManager(context,');
 const managerEnd = source.indexOf('function providerGroupSummary(group)', managerStart);
 assert.ok(managerStart >= 0 && managerEnd > managerStart);
-const createProviderManager = vm.runInNewContext(`${source.slice(managerStart, managerEnd)}\ncreateProviderManager`, { URL, AbortController, modelProviderRulesSnapshot, BUNDLED_CLIENT_COMPANY_RULES, hasSavedProviderSettings, providerRowSavedState });
+const createProviderManager = vm.runInNewContext(`${pureBlock}\n${source.slice(managerStart, managerEnd)}\ncreateProviderManager`, { URL, AbortController });
 const getAtPath = (value, path) => path.reduce((current, key) => current == null ? undefined : current[key], value);
 function providerManagerContext(options = {}) {
   const {
@@ -666,8 +666,8 @@ test('company search is bounded, non-mutating and ignores URL query strings, cre
 });
 
 test('bundled public suffix data and its MPL license are part of the package', () => {
-  assert.ok(packageManifest.files.includes('public_suffix_list.dat'));
-  assert.ok(packageManifest.files.includes('LICENSES/MPL-2.0.txt'));
+  assert.ok(packageManifest.files.includes('src'));
+  assert.ok(packageManifest.files.includes('LICENSES'));
   assert.ok(source.includes('Public Suffix List 2026-11-17_16-14-34_UTC'));
   assert.ok(source.includes('This data is distributed under MPL-2.0'));
 });
@@ -773,7 +773,7 @@ test('provider manager separates settings from credentials and preserves drafts 
   assert.ok(editor.includes('manager.discoverModels(namespaceId, request, controller.signal)'));
   assert.ok(editor.includes('dedupeDiscoveredModels(result.models)'));
   assert.ok(editor.includes('selectedCandidates.has(model.id)'));
-  assert.ok(editor.includes('setDiscoveryCompleted(true)'));
+  assert.ok(editor.includes('setDiscoveryCompleted({ source: result.source, reason: result.reason, scope: result.scope })'));
   assert.ok(editor.includes("t(discoveryCompleted ? 'providerManagerUiDiscoveryNone' : 'providerManagerUiDiscoveryHelp')"));
   assert.ok(editor.includes("className: 'pq-model-dialog-body', 'aria-busy': discoveryBusy"));
   assert.ok(editor.includes("'providerManagerUiNoModelsYet'"));
@@ -1063,6 +1063,49 @@ test('model manager matches Host hostnames by full route identity, including rea
   } finally { manager.dispose(); }
 });
 
+test('the model manager binds catalog grouping hints to the exact route and does not replace actual hostnames', async () => {
+  const { manager } = routeHostManagerFixture(async () => ({ routes: [
+    { provider: 'custom-name', settingsNs: 'demo', settingsPath: ['providers', 'custom'], hostname: null, groupingHostname: 'opencode.ai', groupingSource: 'model-catalog' },
+    { provider: 'custom-name', settingsNs: 'other', settingsPath: [], hostname: 'api.deepseek.com', groupingHostname: 'opencode.ai', groupingSource: 'model-catalog' },
+  ] }));
+  try {
+    await manager.load();
+    const { routeHostsError, entries } = manager.getSnapshot();
+    assert.equal(routeHostsError, false);
+    assert.equal(entries[0].routeHostname, null);
+    assert.equal(entries[0].groupingHostname, 'opencode.ai');
+    assert.equal(entries[0].groupingSource, 'model-catalog');
+    assert.equal(entries[1].routeHostname, 'api.deepseek.com');
+    assert.equal(Object.hasOwn(entries[1], 'groupingHostname'), false);
+    assert.equal(Object.hasOwn(entries[2], 'groupingHostname'), false);
+    assert.equal(modelProviderRouteHost(entries[0]), null);
+    assert.equal(groupModelProvidersByCompany(entries).find(group => group.key === 'company:anomaly').entries[0], entries[0]);
+    assert.equal(modelProviderCompanyCoverage(entries).noHostRoutes, 2);
+  } finally { manager.dispose(); }
+});
+
+test('invalid or incomplete catalog grouping hints are dropped without discarding valid route inventory', async () => {
+  const base = { provider: 'custom-name', settingsNs: 'demo', settingsPath: ['providers', 'custom'], hostname: null };
+  for (const hint of [
+    { groupingHostname: 'opencode.ai' },
+    { groupingHostname: 'opencode.ai', groupingSource: 'unknown' },
+    { groupingHostname: 'https://user:private-password@opencode.ai/private', groupingSource: 'model-catalog' },
+  ]) {
+    const { manager } = routeHostManagerFixture(async () => ({ routes: [
+      { ...base, ...hint },
+      { provider: 'custom-name', settingsNs: 'other', settingsPath: [], hostname: 'api.deepseek.com' },
+    ] }));
+    try {
+      await manager.load();
+      const { routeHostsError, entries } = manager.getSnapshot();
+      assert.equal(routeHostsError, false);
+      assert.equal(Object.hasOwn(entries[0], 'groupingHostname'), false);
+      assert.equal(Object.hasOwn(entries[0], 'groupingSource'), false);
+      assert.equal(entries[1].routeHostname, 'api.deepseek.com');
+    } finally { manager.dispose(); }
+  }
+});
+
 test('failed, incomplete or malformed Host metadata stays unclassified without blocking management or leaking errors', async () => {
   const privateText = 'https://user:private-password@api.openai.com/private?token=private-token';
   const base = { provider: 'custom-name', settingsNs: 'demo', settingsPath: ['providers', 'custom'], hostname: 'api.openai.com' };
@@ -1097,7 +1140,7 @@ test('refresh failures discard old hostname brands, and superseded metadata read
     call++;
     if (call === 1) return { routes: [
       { provider: 'custom-name', settingsNs: 'demo', settingsPath: ['providers', 'custom'], hostname: 'api.openai.com' },
-      { provider: 'custom-name', settingsNs: 'other', settingsPath: [], hostname: null },
+      { provider: 'custom-name', settingsNs: 'other', settingsPath: [], hostname: null, groupingHostname: 'opencode.ai', groupingSource: 'model-catalog' },
     ] };
     if (call === 2) return Promise.reject(new Error('private metadata failure'));
     pendingSignal = signal;
@@ -1105,8 +1148,10 @@ test('refresh failures discard old hostname brands, and superseded metadata read
   });
   await manager.load();
   assert.equal(manager.getSnapshot().entries[0].routeHostname, 'api.openai.com');
+  assert.equal(manager.getSnapshot().entries[1].groupingHostname, 'opencode.ai');
   await manager.load();
   assert.equal(manager.getSnapshot().entries[0].routeHostname, null);
+  assert.equal(Object.hasOwn(manager.getSnapshot().entries[1], 'groupingHostname'), false);
   const pending = manager.load();
   await Promise.resolve();
   manager.dispose();
@@ -1380,7 +1425,7 @@ test('OpenAI spend card selects today and complete UTC-day ranges with matching 
   assert.ok(!source.includes('pq-chart-'));
   assert.ok(metric.includes('role: \'list\''));
   // The grouped request and 30-day aggregation live in the Host costs module.
-  const costs = await readFile(new URL('../openai-costs.js', import.meta.url), 'utf8');
+  const costs = await readFile(new URL('../src/openai-costs.js', import.meta.url), 'utf8');
   assert.ok(costs.includes("url.searchParams.append('group_by', 'api_key_id')"));
   assert.ok(costs.includes("ranges,\n      ...(monthRecords.get(currency) === undefined ? { noRecords: true } : {})"));
   assert.ok(costs.includes('apiKeyId: apiKeyId || null'));

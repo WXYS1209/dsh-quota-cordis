@@ -1,12 +1,22 @@
-# Provider quota
+<div align="center">
 
-[中文说明](<README.zh.md>) · [npm](https://www.npmjs.com/package/dsh-quota-cordis) · [MIT](<LICENSE>)
+<img src="docs/icon.png" alt="DSH provider quota, spend and model management plugin icon" width="160">
 
-Provider quotas, OpenAI spend and company-grouped model management for DeepSeek Harness Desktop. No npm runtime dependencies or install scripts.
+# DSH Provider Quotas, Spend and Model Management
+
+**Provider quotas, OpenAI spend and company-grouped model management for DeepSeek Harness Desktop. No npm runtime dependencies or install scripts.**
+
+[![Stars](https://img.shields.io/github/stars/WXYS1209/dsh-quota-cordis?style=flat&label=stars&color=f59e0b)](https://github.com/WXYS1209/dsh-quota-cordis/stargazers)
+[![npm](https://img.shields.io/npm/v/dsh-quota-cordis?label=npm&color=0891b2&logo=npm)](https://www.npmjs.com/package/dsh-quota-cordis)
+[![Open Plugin Market](https://img.shields.io/endpoint?url=https%3A%2F%2Fdshopen.org%2Fbadge%2Fdsh-quota-cordis.json%3Flang%3Den)](https://dshopen.org/plugins/dsh-quota-cordis/)
+
+[中文说明](<README.zh.md>) &nbsp;|&nbsp; [npm](https://www.npmjs.com/package/dsh-quota-cordis) &nbsp;|&nbsp; [MIT](<LICENSE>)
+
+</div>
 
 ## Install
 
-Version **0.7.3** supports DSH `>=0.2.2-rc.1 <0.2.3-0`. Recommended/source-audit baseline: **0.2.2-rc.5**; rc.1–rc.4 have not each been re-tested against all new features.
+This documentation covers **0.7.4**. The declared DSH range remains `>=0.2.2-rc.1 <0.2.3-0`; the recommended and source-audited baseline is **0.2.2-rc.5**, not a re-test of every earlier RC.
 
 ```sh
 dsh plugin --profile desktop add dsh-quota-cordis
@@ -18,7 +28,7 @@ After updating plugin code, restart DSH and fully refresh the page. The form's *
 
 ## Features
 
-- **Institution quotas:** provider balances, subscription windows and OpenAI spend details.
+- **Provider quotas:** provider balances, subscription windows and OpenAI spend details.
 - **Model management:** company grouping/search, supported provider and model editing, model discovery and custom API routes; unsupported editors remain read-only.
 - **Color settings:** configurable remaining-quota thresholds.
 - **Composer summary:** compact current-provider status with an upward popup.
@@ -47,7 +57,9 @@ Preview features still need live-account validation. Missing data is not shown a
 ## Usage notes
 
 - **OpenAI spend needs a separate organization Admin key**, not an inference key. Enter it in OpenAI details; cost data may arrive late or be revised.
-- Companies follow the actual Host-resolved endpoint. Saved user settings or configured authentication sort first, then localized names; unknown endpoints stay last. Merely enabling a default entry does not count. Edit expands inside its card; discovery uses a dialog and explicit selection. Final **Save** persists changes; editing does not switch the selected/default model.
+- Companies follow the actual Host-resolved endpoint first. If no route endpoint exists, a version-matched built-in catalog with a single model hostname can supply a separately labelled grouping hint; it does not change the request endpoint. Saved user settings or configured authentication sort first, then localized names; unknown endpoints stay last. Merely enabling a default entry does not count. Edit expands inside its card; discovery uses a dialog and explicit selection. Final **Save** persists changes; editing does not switch the selected/default model.
+- **Reasoning efforts** can be inherited, disabled, or configured per editable model where the Host schema supports them. Blank platform values use the selected level's name, except a supported blank `off` uses the protocol default. Choose the effort for a conversation in DSH's native model selector.
+- **Fetch available models** tries the platform first on supported listing routes (OpenAI-compatible, Anthropic and Gemini). The dialog labels live results and their credential scope. If live listing fails or is unsupported, it uses the existing DSH catalog when that fallback is safe, without retrying a failed custom endpoint. A successful empty list is not replaced. Fixed platform endpoints follow the DSH Host's outbound proxy settings; custom endpoints need direct public HTTPS access. OpenAI live listing uses an API key, not ChatGPT subscription authorization. Codex uses the DSH built-in catalog.
 - **Codex login is built into this plugin using DSH native authorization; no extra OAuth UI plugin is required.** Login starts only on an explicit click and is safely unavailable if the native capability is missing. Existing native-grant quota/Credits queries remain independent of signing in here. The new login integration has source/synthetic coverage, not a new live-account OAuth acceptance.
 
 ## Privacy and maintenance
@@ -57,6 +69,12 @@ Credentials stay on the local Host and never enter quota results. Quota queries 
 See [security boundaries](<SECURITY.md>) and [company-rule coverage/maintenance](<docs/COMPANY_COVERAGE.md>) for endpoint precedence, private-state handling and rule updates.
 
 ## Development
+
+- `index.js` / `client.js` — Host and browser entry points.
+- `src/` — runtime modules; bundled data lives in `src/data/`.
+- `company-rules.json` — published company-rule data, also fetched online at runtime, so it stays at the repository root.
+- `locale/`, `icon.png`, `cordis.patch.yml` — package resources.
+- `test/`, `scripts/`, `docs/` — tests, maintenance scripts and documentation.
 
 ```sh
 npm run check

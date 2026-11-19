@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { DEFAULT_COLOR_THRESHOLDS, validateColorThresholds, validateCompanyDomainAliases, QuotaColorSettings, CompanyDomainAliasSettings } from '../quota-settings.js';
+import { DEFAULT_COLOR_THRESHOLDS, validateColorThresholds, validateCompanyDomainAliases, QuotaColorSettings, CompanyDomainAliasSettings } from '../src/quota-settings.js';
 import { apply } from '../index.js';
 
 function fixture() {

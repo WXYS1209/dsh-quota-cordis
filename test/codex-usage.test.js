@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { getEventListeners } from 'node:events';
-import { resolveNativeCodexCredential, parseCodexUsage, queryCodexUsage } from '../codex-usage.js';
+import { resolveNativeCodexCredential, parseCodexUsage, queryCodexUsage } from '../src/codex-usage.js';
 
 const NOW = 1_794_288_000_000;
 const credential = { access: 'MOCK_ACCESS_ACCOUNT_A', accountId: 'mock-account-a', expires: NOW + 600_000 };

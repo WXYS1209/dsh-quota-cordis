@@ -1,6 +1,15 @@
 # Changelog
 
-All notable changes are documented here. Release 0.7.3 uses Asia/Shanghai (UTC+08:00); earlier entries retain their recorded UTC dates.
+All notable changes are documented here. Release dates from 0.7.3 use Asia/Shanghai (UTC+08:00); earlier entries retain their recorded UTC dates.
+
+## 0.7.4 — 2026-11-19
+
+- Keep one **Fetch available models** action: query supported platform endpoints first, report result source and credential scope, then fall back to DSH's built-in catalog when safe. Do not replace a successful empty result, retry a failed custom endpoint through DSH, or fall back after cancellation.
+- Follow the DSH Host proxy for fixed platform listing endpoints; keep validated, DNS-pinned direct HTTPS for custom endpoints. Distinguish connection, platform, and authentication failures. Codex and OpenAI using ChatGPT subscription authorization still use catalog fallback.
+- Add per-model reasoning effort settings where the Host schema supports them: inherit, disable, or customize. A blank platform value uses its level name, except a supported blank `off` preserves protocol behavior. Saving does not change the current conversation's selection.
+- Group the OpenCode and OpenCode Go routes under **OpenCode** using a version-matched built-in model hostname when no route endpoint exists. Show the grouping source; explicit endpoints still take precedence. Resolve installed versions from the Host profile anchor, not a shell-only variable.
+- Use a gauge icon for the settings navigation where DSH exposes its icon slot, and refresh the package and README artwork.
+- Move runtime modules/data into `src/` and `src/data/`, keep the published company rules URL unchanged, and include new modules and assets in package checks. Retain DSH compatibility `>=0.2.2-rc.1 <0.2.3-0`.
 
 ## 0.7.3 — 2026-11-19
 

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { BUNDLED_COMPANY_RULES, COMPANY_RULES_URL, validateCompanyRulesCache } from '../company-rules.js';
-import { COMPANY_RULES_DOMAIN_SPEC, createCompanyRulesCache } from '../company-rules-storage.js';
+import { BUNDLED_COMPANY_RULES, COMPANY_RULES_URL, validateCompanyRulesCache } from '../src/company-rules.js';
+import { COMPANY_RULES_DOMAIN_SPEC, createCompanyRulesCache } from '../src/company-rules-storage.js';
 
 const envelope = () => {
   const timestamp = Date.parse(BUNDLED_COMPANY_RULES.updatedAt) + 1000;

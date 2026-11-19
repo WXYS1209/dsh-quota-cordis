@@ -19,6 +19,7 @@ test('new manual model drafts have stable supplied keys, empty fields and untouc
     assert.deepEqual(normalized(row), {
       draftKey: 'draft-manual-1', source: {}, id: '', name: '', contextWindow: '', maxTokens: '', modalities: [],
       inputTouched: false, nameTouched: false, contextTouched: false, maxTokensTouched: false,
+      reasoningMode: 'inherit', reasoningEntries: {}, reasoningTouched: false,
     });
     assert.deepEqual(normalized(providerModelDraftValue(row)), { id: '' });
   }

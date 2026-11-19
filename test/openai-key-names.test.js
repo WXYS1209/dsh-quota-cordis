@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { queryOpenAIKeyNames } from '../openai-key-names.js';
+import { queryOpenAIKeyNames } from '../src/openai-key-names.js';
 
 const KEY = 'synthetic-admin-key';
 const ref = (projectId, apiKeyId) => `${projectId}\u0000${apiKeyId}`;

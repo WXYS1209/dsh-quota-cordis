@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "revision": 2026111803,
-  "updatedAt": "2026-11-18T09:33:51.921Z",
+  "revision": 2026111901,
+  "updatedAt": "2026-11-19T12:43:02.000Z",
   "companies": [
     {
       "id": "openai",
@@ -379,8 +379,8 @@
     {
       "id": "anomaly",
       "names": {
-        "en": "Anomaly",
-        "zh": "Anomaly"
+        "en": "OpenCode",
+        "zh": "OpenCode"
       },
       "domains": [
         "opencode.ai"

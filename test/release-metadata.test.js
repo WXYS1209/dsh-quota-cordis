@@ -2,8 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { PLUGIN_VERSION, resolveDshRuntimeVersion } from '../version.js';
-import { QuotaManager } from '../manager.js';
+import { PLUGIN_VERSION, resolveDshRuntimeVersion, resolveHostDshInstallation } from '../src/version.js';
+import { QuotaManager } from '../src/manager.js';
 
 const manifest = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
 const catalog = JSON.parse(await readFile(new URL('./fixtures/dsh-provider-catalog.json', import.meta.url), 'utf8'));
@@ -14,15 +14,28 @@ const emptyServices = {
 };
 
 test('release identity, compatibility boundary and shipped metadata module are consistent', () => {
-  assert.equal(manifest.version, '0.7.3');
+  assert.equal(manifest.version, '0.7.4');
   assert.equal(PLUGIN_VERSION, manifest.version);
   assert.equal(manifest.engines.dsh, '>=0.2.2-rc.1 <0.2.3-0');
-  assert.ok(manifest.files.includes('version.js'));
-  assert.ok(manifest.files.includes('codex-oauth.js'));
-  assert.ok(manifest.scripts.check.includes('node --check codex-oauth.js'));
-  assert.ok(manifest.scripts.check.includes('node --check version.js'));
+  assert.ok(manifest.files.includes('index.js'));
+  assert.ok(manifest.files.includes('client.js'));
+  assert.ok(manifest.files.includes('src'));
+  assert.ok(manifest.scripts.check.includes('scripts/check-syntax.js'));
   for (const name of ['dependencies', 'optionalDependencies', 'peerDependencies']) assert.equal(Object.keys(manifest[name] ?? {}).length, 0);
   for (const script of ['preinstall', 'install', 'postinstall', 'prepublishOnly', 'prepack', 'postpack']) assert.equal(manifest.scripts[script], undefined);
+});
+
+test('plugin icon is exported as a direct transparent PNG inside the Host metadata limit', async () => {
+  assert.equal(manifest.exports['./icon'], './icon.png');
+  assert.ok(manifest.files.includes('icon.png'));
+  assert.ok(!manifest.files.includes('icon.svg'));
+  const bytes = await readFile(new URL('../icon.png', import.meta.url));
+  assert.ok(bytes.length >= 33 && bytes.length <= 256 * 1024, 'Host rejects icons above 256 KiB');
+  assert.equal(bytes.subarray(12, 16).toString('ascii'), 'IHDR');
+  assert.deepEqual([...bytes.subarray(0, 8)], [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  assert.equal(bytes.readUInt32BE(16), 256);
+  assert.equal(bytes.readUInt32BE(20), 256);
+  assert.equal(bytes[25], 6, 'icon artwork keeps an alpha channel');
 });
 
 test('quota snapshots report the actual plugin package version without a stale literal', async () => {
@@ -82,19 +95,35 @@ test('account client metadata receives the explicit runtime version without expo
   } finally { await manager.dispose(); }
 });
 
+test('Host installation anchor takes precedence over the optional shell overlay', () => {
+  assert.equal(resolveHostDshInstallation({ installAnchor: join('/synthetic/host', 'package.json') }, '/synthetic/shell'), '/synthetic/host');
+  assert.equal(resolveHostDshInstallation({ installAnchor: 'relative/package.json' }, '/synthetic/shell'), '/synthetic/shell');
+  assert.equal(resolveHostDshInstallation({ installAnchor: '/synthetic/host/boot.js' }, null), undefined);
+});
+
 test('Host construction wires runtime metadata explicitly rather than changing standalone manager behavior', async () => {
   const source = await readFile(new URL('../index.js', import.meta.url), 'utf8');
-  assert.ok(source.includes('version: resolveDshRuntimeVersion()'));
+  assert.ok(source.includes("resolveHostDshInstallation(ctx.get('profileContext'))"));
+  assert.ok(source.includes('version: resolveDshRuntimeVersion({ installation })'));
   assert.equal(source.includes("version: '0.2.2-rc.1'"), false);
 });
 
-test('release documentation has one complete 0.7.3 entry and no new Requirements section', async () => {
+test('current and previous release entries are unique, with no new Requirements section', async () => {
   const changelog = await readFile(new URL('../CHANGELOG.md', import.meta.url), 'utf8');
+  assert.equal((changelog.match(/^## 0\.7\.4\b/gm) ?? []).length, 1);
+  assert.match(changelog, /^## 0\.7\.4 — 2026-11-19$/m);
   assert.equal((changelog.match(/^## 0\.7\.3\b/gm) ?? []).length, 1);
   assert.match(changelog, /^## 0\.7\.3 — 2026-11-19$/m);
-  assert.equal(/^## Unreleased$/m.test(changelog), false);
+  assert.ok(changelog.indexOf('## 0.7.4') < changelog.indexOf('## 0.7.3'));
+  const drafts = [...changelog.matchAll(/^## Unreleased\s*$(?:\r?\n)([\s\S]*?)(?=^## |(?![\s\S]))/gm)];
+  assert.ok(drafts.length <= 1, 'keep at most one unreleased section');
+  if (drafts.length) {
+    assert.ok(drafts[0].index < changelog.indexOf('## 0.7.3'));
+    assert.match(drafts[0][1], /^- \S/m, 'do not publish an empty pending-change list');
+  }
   for (const file of ['README.md', 'README.zh.md']) {
     const text = await readFile(new URL(`../${file}`, import.meta.url), 'utf8');
+    assert.ok(text.includes(`**${manifest.version}**`));
     assert.ok(text.includes('>=0.2.2-rc.1 <0.2.3-0'));
     assert.ok(text.includes('0.2.2-rc.5'));
     assert.equal(/^#{1,6}\s+(?:Requirements|系统要求|环境要求|依赖要求)\s*$/im.test(text), false);

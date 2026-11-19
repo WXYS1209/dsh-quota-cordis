@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { QuotaManager } from '../manager.js';
+import { QuotaManager } from '../src/manager.js';
 
 function fixture(buckets = [{ object: 'bucket', start_time: Date.UTC(2026, 10, 1) / 1000, end_time: Date.UTC(2026, 10, 2) / 1000, results: [
   { object: 'organization.costs.result', amount: { currency: 'usd', value: 1.25 } },

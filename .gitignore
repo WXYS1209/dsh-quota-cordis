@@ -1,4 +1,5 @@
 node_modules/
+release-artifacts/
 *.tgz
 *.log
 .DS_Store

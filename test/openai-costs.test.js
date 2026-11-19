@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { queryOpenAICosts } from '../openai-costs.js';
+import { queryOpenAICosts } from '../src/openai-costs.js';
 
 const KEY = 'synthetic-admin-key-only';
 const NOW = Date.UTC(2026, 10, 5, 9, 30, 45, 123);

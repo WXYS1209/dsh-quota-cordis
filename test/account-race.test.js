@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { QuotaManager } from '../manager.js';
+import { QuotaManager } from '../src/manager.js';
 
 function setup(identityValues) {
   let read = 0;

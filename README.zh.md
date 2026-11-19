@@ -1,12 +1,22 @@
-# 供应商额度 Provider quota
+<div align="center">
 
-[English](<README.md>) · [npm](https://www.npmjs.com/package/dsh-quota-cordis) · [MIT](<LICENSE>)
+<img src="docs/icon.png" alt="DSH 供应商配置、花费及额度展示插件图标" width="160">
 
-面向 DeepSeek Harness Desktop，查询额度与 OpenAI 支出，并按公司管理供应商和模型。无 npm 运行时依赖或安装脚本。
+# DSH 供应商配置、花费及额度展示插件
+
+**面向 DeepSeek Harness Desktop，查询额度与 OpenAI 支出，并按公司管理供应商和模型。无 npm 运行时依赖或安装脚本。**
+
+[![Stars](https://img.shields.io/github/stars/WXYS1209/dsh-quota-cordis?style=flat&label=stars&color=f59e0b)](https://github.com/WXYS1209/dsh-quota-cordis/stargazers)
+[![npm](https://img.shields.io/npm/v/dsh-quota-cordis?label=npm&color=0891b2&logo=npm)](https://www.npmjs.com/package/dsh-quota-cordis)
+[![开放插件市场](https://img.shields.io/endpoint?url=https%3A%2F%2Fdshopen.org%2Fbadge%2Fdsh-quota-cordis.json)](https://dshopen.org/zh/plugins/dsh-quota-cordis/)
+
+[English](<README.md>) &nbsp;|&nbsp; [npm](https://www.npmjs.com/package/dsh-quota-cordis) &nbsp;|&nbsp; [MIT](<LICENSE>)
+
+</div>
 
 ## 安装
 
-**0.7.3** 声明兼容 DSH `>=0.2.2-rc.1 <0.2.3-0`。推荐及源码核对基线为 **0.2.2-rc.5**；未逐一对 rc.1–rc.4 重测全部新功能。
+本说明对应 **0.7.4**。DSH 兼容声明仍为 `>=0.2.2-rc.1 <0.2.3-0`；推荐及源码核对基线为 **0.2.2-rc.5**，未逐一重测全部早期 RC。
 
 ```sh
 dsh plugin --profile desktop add dsh-quota-cordis
@@ -47,7 +57,9 @@ dsh plugin --profile desktop add /path/to/checkout
 ## 使用说明
 
 - **OpenAI 支出需单独的组织级 Admin Key**，不能使用推理 Key；在 OpenAI 详情中设置。支出可能延迟或被修订。
-- 公司归属按 Host 确认的实际端点；已有用户设置或认证记录的公司优先，组内按当前语言名称排序，未知端点始终最后。仅默认启用不算已保存。编辑在原卡片内展开，模型发现使用弹窗并明确选择；最终点击**保存**才持久化，不切换当前/默认模型。
+- 公司归属优先按 Host 确认的实际端点；没有路由地址时，版本匹配且模型端点一致的内置目录可提供单独标明来源的展示域名，不改变请求地址。已有用户设置或认证记录的公司优先，组内按当前语言名称排序，未知端点始终最后。仅默认启用不算已保存。编辑在原卡片内展开，模型发现使用弹窗并明确选择；最终点击**保存**才持久化，不切换当前/默认模型。
+- **推理档位**在 Host 支持的模型编辑项中可继承、禁用或自定义。已选档位的平台参数可留空，默认使用同名值；支持留空的 `off` 保留协议默认行为。会话实际用哪一档仍由 DSH 原生模型选择器决定。
+- **获取可用模型**对受支持的列表接口（OpenAI 兼容、Anthropic、Gemini）优先查询平台，并标明来源和凭据范围。实时发现失败或不支持时，仅在可安全回退的路由上使用 DSH 内置目录，不重复请求失败的自定义端点；平台成功返回空列表不回退。固定平台端点遵循 DSH Host 的出站代理配置；自定义端点需通过公网 HTTPS 直连。OpenAI 实时列表使用 API Key，不使用 ChatGPT 订阅授权；Codex 使用 DSH 内置目录。
 - **Codex 登录已内置于本插件，复用 DSH 原生授权能力，无需额外 OAuth UI 插件。** 只有明确点击登录才发起授权；缺少原生能力时安全禁用登录。已有原生授权的额度/Credits 查询不依赖在此登录。新登录集成仅有源码/合成验证，尚未新增真实账户 OAuth 验收。
 
 ## 隐私与维护
@@ -57,6 +69,12 @@ dsh plugin --profile desktop add /path/to/checkout
 端点优先级、状态处理与规则维护细节见[安全说明](<SECURITY.md>)和[公司规则覆盖](<docs/COMPANY_COVERAGE.md>)。
 
 ## 开发
+
+- `index.js` / `client.js`：Host 与浏览器入口。
+- `src/`：运行时模块；内置数据位于 `src/data/`。
+- `company-rules.json`：对外发布的公司规则数据，运行时也会在线拉取，因此保留在仓库根目录。
+- `locale/`、`icon.png`、`cordis.patch.yml`：插件包资源。
+- `test/`、`scripts/`、`docs/`：测试、维护脚本与文档。
 
 ```sh
 npm run check

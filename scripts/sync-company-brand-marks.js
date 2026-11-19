@@ -1,5 +1,5 @@
 import { readFile, writeFile } from 'node:fs/promises';
-import { BUNDLED_COMPANY_BRAND_MARKS } from '../company-brand-marks.js';
+import { BUNDLED_COMPANY_BRAND_MARKS } from '../src/company-brand-marks.js';
 
 if (process.argv.slice(2).some(argument => argument !== '--check')) throw new Error('Usage: sync-company-brand-marks.js [--check]');
 const clientPath = new URL('../client.js', import.meta.url);

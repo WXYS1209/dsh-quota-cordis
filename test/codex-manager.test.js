@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { QuotaManager } from '../manager.js';
-import { classifyProvider } from '../adapters.js';
+import { QuotaManager } from '../src/manager.js';
+import { classifyProvider } from '../src/adapters.js';
 
 function fixture() {
   const state = { now: Date.UTC(2026, 10, 10, 6), calls: 0, used: 40, http: 200, profile: {}, duringFetch: null,

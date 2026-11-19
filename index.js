@@ -1,20 +1,27 @@
-import { QuotaManager } from './manager.js';
-import { CodexOAuthController } from './codex-oauth.js';
-import { resolveDshRuntimeVersion } from './version.js';
-import { describeOpenAIAdminKey, resolveOpenAIAdminKey } from './openai-admin.js';
-import { CompanyDomainAliasSettings, QuotaColorSettings } from './quota-settings.js';
-import { readProviderRouteHosts, nativeDeepSeekEndpointEnvironment } from './route-hosts.js';
-import { CompanyRulesManager } from './company-rules.js';
-import { createCompanyRulesCache } from './company-rules-storage.js';
+import { QuotaManager } from './src/manager.js';
+import { CodexOAuthController } from './src/codex-oauth.js';
+import { resolveDshRuntimeVersion, resolveHostDshInstallation } from './src/version.js';
+import { describeOpenAIAdminKey, resolveOpenAIAdminKey } from './src/openai-admin.js';
+import { CompanyDomainAliasSettings, QuotaColorSettings } from './src/quota-settings.js';
+import { readProviderRouteHosts, nativeDeepSeekEndpointEnvironment } from './src/route-hosts.js';
+import { CompanyRulesManager } from './src/company-rules.js';
+import { createCompanyRulesCache } from './src/company-rules-storage.js';
+import { runModelDiscovery } from './src/model-discovery-operation.js';
+import { loadModelCatalogGrouping } from './src/model-catalog-grouping.js';
 
 export const name = 'provider-quota';
 export const inject = ['llm', 'settings', 'credentials', 'connection', 'tools'];
 const ADMIN_KEY_REF = 'OPENAI_ADMIN_KEY_DSH';
 const validAdminKey = value => typeof value === 'string' && /^sk-admin-[A-Za-z0-9_-]{8,8192}$/.test(value);
-async function readSettingsPayload(request) {
+async function readSettingsPayload(request, parentSignal = request.signal) {
   const reader = request.body?.getReader();
   if (!reader) throw Object.assign(new Error('invalid-request'), { code: 'invalid-request' });
-  const signal = AbortSignal.any([request.signal, AbortSignal.timeout(5000)]);
+  const signal = AbortSignal.any([parentSignal, AbortSignal.timeout(5000)]);
+  if (signal.aborted) {
+    try { Promise.resolve(reader.cancel()).catch(() => {}); } catch {}
+    try { reader.releaseLock(); } catch {}
+    throw Object.assign(new Error('invalid-request'), { code: 'invalid-request' });
+  }
   const chunks = [];
   let size = 0;
   try {
@@ -68,10 +75,12 @@ export function apply(ctx, config = {}) {
     await editor.edit(entry, current => ({ ...current, domainAliases: value }));
   } : undefined);
   const launchEnvironment = nativeDeepSeekEndpointEnvironment(ctx.get('launchEnvironment'), () => process.env.DEEPSEEK_BASE_URL);
+  const installation = resolveHostDshInstallation(ctx.get('profileContext'));
+  const catalogGrouping = loadModelCatalogGrouping(installation);
   const manager = new QuotaManager({
     llm: ctx.llm, settings: ctx.settings, credentials: ctx.credentials, launchEnvironment,
     deepseekAccount: ctx.get('deepseekAccount'), agentDefaultModel: ctx.get('agentDefaultModel'),
-  }, { version: resolveDshRuntimeVersion(), colorThresholdsProvider: () => colors.read().colorThresholds });
+  }, { version: resolveDshRuntimeVersion({ installation }), colorThresholdsProvider: () => colors.read().colorThresholds });
   ctx.effect(() => () => manager.dispose());
   ctx.provide('providerQuota', manager);
   const codexOAuth = new CodexOAuthController({
@@ -105,6 +114,41 @@ export function apply(ctx, config = {}) {
   }));
   ctx.effect(() => ctx.connection.fetch.register({
     path: '/api/provider-quota-codex-oauth/action', methods: ['POST'], requestBody: 'streaming', fetch: codexOAuthFetch,
+  }));
+  const discoveryLifetime = new AbortController();
+  ctx.effect(() => () => discoveryLifetime.abort());
+  let activeDiscoveries = 0;
+  ctx.effect(() => ctx.connection.fetch.register({
+    path: '/api/provider-quota-model-discovery', methods: ['POST'], requestBody: 'streaming',
+    async fetch(request) {
+      const headers = { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' };
+      if (request.method !== 'POST') return Response.json({ error: 'invalid-request' }, { status: 405, headers });
+      if (!sameOriginOAuthRequest(request) || !colors.csrfMatches(request.headers.get('X-Quota-Settings-CSRF')) || !/^application\/json(?:\s*;|$)/i.test(request.headers.get('Content-Type') ?? '')) {
+        return Response.json({ error: 'forbidden' }, { status: 403, headers });
+      }
+      if (activeDiscoveries >= 4) return Response.json({ error: 'busy' }, { status: 429, headers });
+      activeDiscoveries++;
+      try {
+        const signal = AbortSignal.any([request.signal, discoveryLifetime.signal, AbortSignal.timeout(15_000)]);
+        signal.throwIfAborted();
+        const raw = await readSettingsPayload(request, signal);
+        const work = runModelDiscovery({ llm: ctx.llm, settings: ctx.settings, credentials: ctx.credentials }, raw, { signal });
+        // Bound service calls which don't expose cancellation; the same signal
+        // fences subsequent credential lookups and fetches inside the operation.
+        let stop;
+        try {
+          const deadline = new Promise((_, reject) => {
+            stop = () => reject(Object.assign(new Error('discovery stopped'), { code: request.signal.aborted || discoveryLifetime.signal.aborted ? 'cancelled' : 'timeout' }));
+            if (signal.aborted) stop();
+            else signal.addEventListener('abort', stop, { once: true });
+          });
+          return Response.json(await Promise.race([work, deadline]), { headers });
+        } finally { signal.removeEventListener('abort', stop); }
+      } catch (cause) {
+        const error = ['invalid-request', 'unsupported', 'timeout', 'cancelled'].includes(cause?.code) ? cause.code : 'failed';
+        return Response.json({ error }, { status: error === 'invalid-request' ? 400 : error === 'timeout' ? 504 : 503, headers });
+      } finally { activeDiscoveries--; }
+    },
   }));
   const companyRules = new CompanyRulesManager({ cache: createCompanyRulesCache(ctx) });
   ctx.provide('providerCompanyRules', companyRules);
@@ -150,7 +194,7 @@ export function apply(ctx, config = {}) {
     async fetch(request) {
       const headers = { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' };
       try {
-        return Response.json(await readProviderRouteHosts({ llm: ctx.llm, settings: ctx.settings, credentials: ctx.credentials, launchEnvironment, deepseekAccount: ctx.get('deepseekAccount') }, { signal: request.signal }), { headers });
+        return Response.json(await readProviderRouteHosts({ llm: ctx.llm, settings: ctx.settings, credentials: ctx.credentials, launchEnvironment, deepseekAccount: ctx.get('deepseekAccount'), catalogGrouping }, { signal: request.signal }), { headers });
       } catch {
         return Response.json({ error: 'route-hosts-unavailable' }, { status: 503, headers });
       }

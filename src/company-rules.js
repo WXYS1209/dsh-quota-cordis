@@ -14,7 +14,7 @@ const failure = code => Object.assign(new Error(code), { code });
 const clone = value => JSON.parse(JSON.stringify(value));
 const own = (value, key) => Object.prototype.hasOwnProperty.call(value, key);
 const exact = new Set(), wildcard = new Set(), exception = new Set();
-for (const raw of readFileSync(new URL('./public_suffix_list.dat', import.meta.url), 'utf8').split(/\r?\n/)) {
+for (const raw of readFileSync(new URL('./data/public_suffix_list.dat', import.meta.url), 'utf8').split(/\r?\n/)) {
   const line = raw.trim();
   if (!line || line.startsWith('//')) continue;
   const kind = line.startsWith('!') ? exception : line.startsWith('*.') ? wildcard : exact;
@@ -143,7 +143,7 @@ function freeze(value) {
   if (value && typeof value === 'object') { for (const child of Object.values(value)) freeze(child); Object.freeze(value); }
   return value;
 }
-export const BUNDLED_COMPANY_RULES = freeze(validateCompanyRules(JSON.parse(readFileSync(new URL('./company-rules.json', import.meta.url), 'utf8'))));
+export const BUNDLED_COMPANY_RULES = freeze(validateCompanyRules(JSON.parse(readFileSync(new URL('../company-rules.json', import.meta.url), 'utf8'))));
 
 function cancelBody(body) {
   try { Promise.resolve(body?.cancel()).catch(() => {}); } catch {}

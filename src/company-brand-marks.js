@@ -37,7 +37,7 @@ export function validateCompanyBrandMarks(value) {
   return { marks, companies: { ...value.companies } };
 }
 
-const raw = JSON.parse(readFileSync(new URL('./company-brand-marks.json', import.meta.url), 'utf8'));
+const raw = JSON.parse(readFileSync(new URL('./data/company-brand-marks.json', import.meta.url), 'utf8'));
 const bundle = validateCompanyBrandMarks(raw);
 export const BUNDLED_COMPANY_BRAND_MARKS = Object.freeze(bundle.marks);
 export const BUNDLED_COMPANY_BRAND_ASSIGNMENTS = Object.freeze(bundle.companies);

@@ -2,14 +2,14 @@
 
 ## 当前核对范围
 
-本次 0.7.3 发布准备使用重新采集的 **DSH 0.2.2-rc.5 / pi-ai 1.3.0** 公共供应商与内置模型目录，而不是用户 profile、凭据或实际网络请求。可复现数据见[目录快照](<../test/fixtures/dsh-provider-catalog.json>)，断言见[覆盖测试](<../test/company-catalog-coverage.test.js>)。
+当前覆盖基线使用 **DSH 0.2.2-rc.5 / pi-ai 1.3.0** 的公共供应商与内置模型目录，而不是用户 profile、凭据或实际网络请求。可复现数据见[目录快照](<../test/fixtures/dsh-provider-catalog.json>)，断言见[覆盖测试](<../test/company-catalog-coverage.test.js>)。
 
 - 42 个内置供应商入口（同一公司可有地区、套餐和协议入口）。
 - 34 个固定目录默认端点，涉及 33 个不同主机名。
 - 50 个不同模型端点模式；结合默认端点，共有 **39 个不同固定主机名，全部命中公司规则**。
 - Google Vertex 的 `{location}-aiplatform.googleapis.com` 仅核对固定的 `googleapis.com` 服务后缀，不伪造地区或把模板称为实际请求地址。
 - Azure 目录没有固定默认/模型 URL。只有配置或环境明确提供实际地址后才进行主机名分组，不根据 `azure` 这个供应商 ID 猜测地址或公司。
-- 模型目录端点用于维护期覆盖审计，不作为某条路由实际生效 URL 的证据。界面仍只使用 Host 确认的路由主机名；Bedrock、Cloudflare、OpenCode、TypeSafe 等没有固定路由 URL 的入口可能仍显示未分类。
+- [模型目录归组数据](<../src/data/model-catalog-hosts.json>)仅在本机 DSH、pi-ai 版本与快照一致，且内置入口缺少路由级地址与部署变量、全部聊天模型端点均可解析且主机名相同时使用。当前 `opencode`、`opencode-go` 均按 `opencode.ai` 展示归组；不会把模型目录视作实际生效 URL。显式覆盖优先；无法校验的自定义模型、协议或请求头覆盖不使用目录归组。
 
 以上数字是本次核对的安装版本，不是未来所有 DSH 版本的永久保证。覆盖测试使用当前供应商目录可确认的**不同主机名**，包含尚未配置的目录入口，不表示已发起了这些网络请求。无 URL 的路由不伪装成已覆盖。模型页仅保留公司搜索与管理入口，不展示规则版本、覆盖统计或管理提示面板。
 
@@ -42,7 +42,7 @@
 | Together AI | together.ai |
 | Vercel | 仅 ai-gateway.vercel.sh 精确主机及 vercel.com；不认领其他 vercel.sh 租户 |
 | 小米 / Xiaomi | MiMo 及地区 Token Plan / xiaomimimo.com |
-| Anomaly | OpenCode / Zen / Go 的 opencode.ai；官方服务条款指定 Anomaly Innovations, Inc. |
+| OpenCode | `opencode.ai`，含 OpenCode Models（原 Zen）和 Go；服务条款中的运营方为 Anomaly Innovations, Inc. |
 | TypeSafe AI | typesafe.ai；依据官方 SDK 和公司协议 |
 | 亚马逊云科技 / Amazon Web Services | 当前目录明确登记的两个 Bedrock 区域主机，精确匹配；不认领任意 amazonaws.com 租户 |
 | 微软 / Microsoft | openai.azure.com、services.ai.azure.com 的官方服务子域；不认领任意 azure.com 主机 |

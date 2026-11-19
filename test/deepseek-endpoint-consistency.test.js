@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { QuotaManager } from '../manager.js';
-import { readProviderRouteHosts } from '../route-hosts.js';
+import { QuotaManager } from '../src/manager.js';
+import { readProviderRouteHosts } from '../src/route-hosts.js';
 
 const OFFICIAL = 'https://api.deepseek.com/anthropic';
 const RELAY = 'https://relay.example.test/anthropic';

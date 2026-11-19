@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { QuotaManager, readJson } from '../manager.js';
+import { QuotaManager, readJson } from '../src/manager.js';
 import { apply, inject } from '../index.js';
 
 const balance = amount => ({ balance_infos: [{ currency: 'CNY', total_balance: amount, granted_balance: '0.00', topped_up_balance: amount }] });

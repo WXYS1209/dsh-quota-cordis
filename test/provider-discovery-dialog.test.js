@@ -13,7 +13,7 @@ const discoverBody = editor.split('async function discover()')[1].split('functio
 const closeBody = editor.split('function closeDiscovery()')[1].split('React.useEffect')[0];
 // Run actual async action functions with injected callbacks, not React hooks or a DOM simulation.
 const actions = vm.runInNewContext(`env => {
-  const { namespace, namespaceId, discoveryBusy, profileDisabled, isNewCustom, isCustomRoute, routeId, urlText, protocol, keyDraft, manager, discoveryController,
+  const { namespace, namespaceId, discoveryBusy, profileDisabled, isNewCustom, isCustomRoute, routeId, urlText, endpointChanged, protocol, keyDraft, manager, discoveryController,
     setDiscoveryOpen, setDiscoveryBusy, setDiscoveryCompleted, setDiscoveryError, setCandidateQuery, setCandidates, setSelectedCandidates } = env;
   function closeDiscovery() ${closeBody}
   async function discover() ${discoverBody}
@@ -55,6 +55,14 @@ test('discovery opens the modal before the explicit request and copies only the 
   assert.equal(captured[2], h.env.discoveryController.current.signal);
   assert.deepEqual([...h.events.filter(([name]) => name === 'setCandidates').at(-1)[1].map(model => model.id)], ['model']);
   assert.deepEqual(h.events.at(-1), ['setDiscoveryBusy', false]);
+});
+
+test('discovery signals an intentionally cleared route endpoint without sending a blank URL', async () => {
+  let captured;
+  const h = fixture(async (_, request) => { captured = request; return { kind: 'found', source: 'dsh-catalog', reason: 'unsafe-endpoint', models: [] }; }, { urlText: '', endpointChanged: true });
+  await h.discover();
+  assert.deepEqual(normalize(captured), { provider: 'test-provider', endpointChanged: true });
+  assert.deepEqual(normalize(h.events.filter(([name]) => name === 'setDiscoveryCompleted').at(-1)[1]), { source: 'dsh-catalog', reason: 'unsafe-endpoint' });
 });
 
 test('cancel aborts the real signal, discards selection and ignores a late successful response', async () => {
@@ -146,8 +154,8 @@ test('discovery results exist only in the modal and confirmation remains additiv
   assert.ok(editor.includes('checked: alreadyAdded || selectedCandidates.has(model.id)'));
   assert.ok(editor.includes('disabled: alreadyAdded || profileDisabled || discoveryBusy'));
   assert.ok(editor.includes('selectVisibleProviderCandidates(current, visibleCandidates.map'));
-  assert.ok(editor.includes('if (!discoveryOpen || !profileDisabled) return'));
-  assert.ok(editor.includes('discoveryController.current?.abort(); setDiscoveryBusy(false)'));
+  assert.ok(editor.includes('if (discoveryOpen) closeDiscovery();'));
+  assert.ok(closeBody.includes('discoveryController.current?.abort()'));
   const append = editor.split('function appendSelectedCandidates()')[1].split('function addFieldOperation')[0];
   assert.equal(/manager\.(?:writeSettings|storeCredential)/.test(append), false);
   assert.ok(append.includes('setDiscoveryOpen(false)'));

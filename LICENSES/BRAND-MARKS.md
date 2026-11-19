@@ -1,6 +1,6 @@
 # Bundled company and product brand marks
 
-The supplemental geometry in [company-brand-marks.json](<../company-brand-marks.json>) is copied from the pinned, redistribution-licensed sources below. It is rendered locally as plain SVG paths; source and brand URLs are provenance metadata, never runtime image sources. No original third-party logo was invented for this feature.
+The supplemental geometry in [company-brand-marks.json](<../src/data/company-brand-marks.json>) is copied from the pinned, redistribution-licensed sources below. It is rendered locally as plain SVG paths; source and brand URLs are provenance metadata, never runtime image sources. No original third-party logo was invented for this feature.
 
 All marks in this supplemental file are monochrome: the renderer supplies the current theme's foreground color. Original path geometry is retained, with whitespace normalized. Where the upstream SVG specifies an even-odd fill rule, `fillRule: "evenodd"` is retained. No scripts, styles, event handlers, remote references, embedded images, masks, clipping definitions or transforms are copied into the data.
 
@@ -34,7 +34,7 @@ Every asset URL in the table is pinned to the release or commit above. Detailed 
 | Together AI | `together-ai` | [Lobe `together.svg`](https://raw.githubusercontent.com/lobehub/lobe-icons/v6.16.0/packages/static-svg/icons/together.svg) | Together AI brand |
 | Vercel | `vercel` | [Simple Icons `vercel.svg`](https://raw.githubusercontent.com/simple-icons/simple-icons/15.22.0/icons/vercel.svg) | Vercel corporate brand |
 | Xiaomi / 小米 | `xiaomi` | [Simple Icons `xiaomi.svg`](https://raw.githubusercontent.com/simple-icons/simple-icons/15.22.0/icons/xiaomi.svg) | Xiaomi corporate brand for MiMo |
-| Anomaly | `opencode` | [Lobe `opencode.svg`](https://raw.githubusercontent.com/lobehub/lobe-icons/v6.16.0/packages/static-svg/icons/opencode.svg) | **OpenCode product mark**, not invented Anomaly corporate artwork |
+| OpenCode | `opencode` | [Lobe `opencode.svg`](https://raw.githubusercontent.com/lobehub/lobe-icons/v6.16.0/packages/static-svg/icons/opencode.svg) | **OpenCode product mark**, not invented Anomaly corporate artwork |
 | TypeSafe AI | `typesafe-ai` | [Lobe `typesafeai.svg`](https://raw.githubusercontent.com/lobehub/lobe-icons/v6.16.0/packages/static-svg/icons/typesafeai.svg) | TypeSafe AI brand; not the former Scala company called Typesafe |
 | Amazon Web Services / 亚马逊云科技 | `amazon-web-services` | [Lobe `aws.svg`](https://raw.githubusercontent.com/lobehub/lobe-icons/v6.16.0/packages/static-svg/icons/aws.svg) | AWS brand for Bedrock |
 | Microsoft / 微软 | `microsoft` | [Lobe `microsoft.svg`](https://raw.githubusercontent.com/lobehub/lobe-icons/v6.16.0/packages/static-svg/icons/microsoft.svg) | Microsoft corporate brand for Azure |

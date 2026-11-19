@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { apply } from '../index.js';
-import { BUNDLED_COMPANY_RULES, COMPANY_RULES_URL } from '../company-rules.js';
+import { BUNDLED_COMPANY_RULES, COMPANY_RULES_URL } from '../src/company-rules.js';
 
 function fixture({ fetcher = async () => new Response(null, { status: 404 }), storageDomain } = {}) {
   const calls = { fetch: [], credential: 0, config: 0, get: [] };

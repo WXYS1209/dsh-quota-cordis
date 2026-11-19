@@ -2,8 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
-import { validateCompanyBrandMarks, BUNDLED_COMPANY_BRAND_MARKS, BUNDLED_COMPANY_BRAND_ASSIGNMENTS, LOCAL_COMPANY_ICON_KEYS } from '../company-brand-marks.js';
-import { BUNDLED_COMPANY_RULES } from '../company-rules.js';
+import { validateCompanyBrandMarks, BUNDLED_COMPANY_BRAND_MARKS, BUNDLED_COMPANY_BRAND_ASSIGNMENTS, LOCAL_COMPANY_ICON_KEYS } from '../src/company-brand-marks.js';
+import { BUNDLED_COMPANY_RULES } from '../src/company-rules.js';
 
 const fixture = () => ({ schemaVersion: 1, marks: { brand: { viewBox: '0 0 24 24', paths: ['M0 0h24v24H0z'] } }, companies: { example: 'brand' }, sources: [{ key: 'brand', project: 'Test Brand Icons', version: '1.0.0', assetUrl: 'https://example.com/1.0.0/brand.svg', license: 'MIT', brandUrl: 'https://example.com/' }] });
 const source = await readFile(new URL('../client.js', import.meta.url), 'utf8');

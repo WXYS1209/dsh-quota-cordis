@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
-import { readProviderRouteHosts } from '../route-hosts.js';
+import { readProviderRouteHosts } from '../src/route-hosts.js';
 
 const source = await readFile(new URL('../client.js', import.meta.url), 'utf8');
 const pure = source.split('// BEGIN PURE LAYOUT')[1].split('// END PURE LAYOUT')[0];

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { providerRouteHostname, readProviderRouteHosts, resolveProviderBaseURL } from '../route-hosts.js';
+import { providerRouteHostname, readProviderRouteHosts, resolveProviderBaseURL } from '../src/route-hosts.js';
 import { apply } from '../index.js';
 
 const entry = (provider, extra = {}) => ({ provider, settingsNs: 'pi', settingsPath: ['providers', provider], defaultBaseURL: 'https://api.openai.com/v1', ...extra });
