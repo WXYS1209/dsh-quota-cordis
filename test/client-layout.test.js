@@ -460,24 +460,25 @@ test('client manifest requests Remote and configForms dependencies used by model
   assert.ok(inject.includes('configForms'));
 });
 
-test('institution quotas, model management, and color thresholds are separate accessible tabs', () => {
+test('model, quota, and settings tabs are separate and accessible', () => {
   const page = source.split('function Page()')[1].split('function PopupSurface')[0];
-  assert.ok(source.includes("providerSettingsTab: '机构额度'"));
-  assert.ok(source.includes("providerManagerTab: '模型管理'"));
-  assert.ok(source.includes("empty: '尚未发现已配置的供应商。请在「模型管理」标签或官方「模型」设置中添加供应商。'"));
-  assert.ok(source.includes("providerManagerTab: 'Model management'"));
-  assert.ok(source.includes("empty: 'No configured providers found. Add one in the Model management tab or official Models settings.'"));
-  assert.ok(source.includes("colorsTab: '颜色设置'"));
-  assert.ok(page.includes("React.useState('providers')"));
-  assert.ok(page.includes("const tabs = ['providers', 'models', 'colors']"));
-  assert.ok(page.includes("const [modelsVisited, setModelsVisited] = React.useState(false)"));
+  assert.ok(source.includes("providerSettingsTab: '额度'"));
+  assert.ok(source.includes("providerManagerTab: '模型'"));
+  assert.ok(source.includes("empty: '尚未发现已配置的提供商。请在「模型」标签或官方「模型」设置中添加提供商。'"));
+  assert.ok(source.includes("providerManagerTab: 'Models'"));
+  assert.ok(source.includes("empty: 'No configured providers found. Add one in the Models tab or official Models settings.'"));
+  assert.ok(source.includes("colorsTab: '设置'"));
+  assert.ok(page.includes("React.useState('models')"));
+  assert.ok(page.includes("const tabs = ['models', 'providers', 'colors']"));
+  assert.ok(page.includes("const [modelsVisited, setModelsVisited] = React.useState(true)"));
   assert.ok(page.includes("const selectTab = id => { if (id === 'models') setModelsVisited(true); setTab(id); }"));
   assert.ok(page.includes("modelsVisited ? h(ProviderManager, { manager: providerManager }) : null"));
   assert.ok(page.includes("role: 'tablist'"));
   assert.ok(page.includes("role: 'tab'"));
   assert.ok(page.includes("'aria-selected': tab === id"));
   assert.ok(page.includes("tabIndex: tab === id ? 0 : -1"));
-  assert.ok(page.includes("id: 'pq-panel-providers', role: 'tabpanel'"));
+  assert.ok(page.includes("id: 'pq-panel-models', role: 'tabpanel'"));
+  assert.ok(page.indexOf("id: 'pq-panel-models'") < page.indexOf("id: 'pq-panel-providers'"), 'panel order follows the tab order');
   assert.ok(page.includes("id: 'pq-panel-models', role: 'tabpanel'"));
   assert.ok(page.includes("h(ProviderManager, { manager: providerManager })"));
   assert.ok(page.includes("id: 'pq-panel-colors', role: 'tabpanel'"));
@@ -532,7 +533,7 @@ test('provider management is an independent top-level tab with focus restoration
   assert.ok(source.includes("providerManagerLoadCauseRemoteError: 'Remote returned a failure'"));
   assert.ok(source.includes("providerManagerLoadRemoteCodeLabel: 'Remote 错误代码：'"));
   assert.ok(source.includes("providerManagerLoadRemoteCodeLabel: 'Remote error code: '"));
-  assert.ok(source.includes("providerManagerLoadFailed: '无法读取供应商目录或设置。请重新载入；若问题仍存在，请展开下方“安全运行时诊断”并分享状态（不含密钥或原始错误详情）。'"));
+  assert.ok(source.includes("providerManagerLoadFailed: '无法读取提供商目录或设置。请重新载入；若问题仍存在，请展开下方“安全运行时诊断”并分享状态（不含密钥或原始错误详情）。'"));
   assert.ok(source.includes("providerManagerLoadFailed: 'Could not read the provider directory or settings. Reload and try again; if it persists, expand “Safe runtime diagnostics” below and share the status values (no credentials or raw error details).'"));
   assert.equal(providerManager.includes('state.error.message'), false);
   assert.ok(source.includes("ref: backButtonRef, tabIndex: -1, className: 'pq-manager-inline-title'"));
@@ -577,12 +578,12 @@ test('model management opens company cells before showing provider configuration
   assert.equal(providerManager.includes('const providerIconGroup'), false);
   assert.ok(source.includes("providerManagerCompanyCellHint: '点击查看路由和配置'"));
   assert.ok(source.includes("providerManagerCompanyCellHint: 'Select to view routes and settings'"));
-  assert.ok(source.includes("providerManagerIntro: '供应商路由按生效请求主机名自动归并为公司卡片。"));
-  assert.ok(source.includes("providerManagerIntro: 'Provider routes are grouped automatically into company tiles by their effective request hostname."));
+  assert.ok(source.includes("providerManagerIntro: '各路由按生效请求主机名自动归并为提供商卡片。"));
+  assert.ok(source.includes("providerManagerIntro: 'Routes are grouped automatically into provider tiles by their effective request hostname."));
   assert.ok(providerManager.includes("className: 'pq-provider-cell-hosts'"));
   assert.ok(providerManager.includes("'aria-label': `${title}. ${routeSummary}."));
   assert.equal(providerManager.includes('pq-provider-grouping-details'), false);
-  assert.ok(source.includes("providerManagerAddCustom: '新增自定义供应商'"));
+  assert.ok(source.includes("providerManagerAddCustom: '新增自定义提供商'"));
   assert.ok(source.includes("providerManagerAddCustom: 'Add custom provider'"));
 });
 
@@ -613,8 +614,8 @@ test('company overview replaces rule diagnostics with accessible local search an
   const filterHelper = pureBlock.split('function filterModelProviderCompanyGroups(')[1];
   assert.equal(/\b(?:fetch|requestCompanyRules|manager\.load|readRouteHosts)\s*\(/.test(filterHelper), false);
   assert.ok(source.includes('readCompanyRules: signal => requestCompanyRules(false, signal)'));
-  assert.ok(source.includes("providerManagerCompanySearchLabel: '搜索公司'"));
-  assert.ok(source.includes("providerManagerCompanySearchLabel: 'Search companies'"));
+  assert.ok(source.includes("providerManagerCompanySearchLabel: '搜索提供商'"));
+  assert.ok(source.includes("providerManagerCompanySearchLabel: 'Search providers'"));
 });
 
 test('company search matches bilingual names, product/provider labels and verified or current hostnames', () => {
@@ -1334,7 +1335,7 @@ test('provider settings use clickable organization cells with OpenAI details nes
   const page = source.split('function Page()')[1].split('function PopupSurface')[0];
   const providers = source.split('function ProviderSettings({ rows, loading, error, colorThresholds })')[1].split('function Page()')[0];
   const extra = source.split('function OpenAIExtraSettings({ routes })')[1].split('function ProviderSettings')[0];
-  assert.ok(page.includes("const tabs = ['providers', 'models', 'colors']"));
+  assert.ok(page.includes("const tabs = ['models', 'providers', 'colors']"));
   assert.ok(page.includes("h(ProviderSettings, { rows, loading: state.loading, error: state.error, colorThresholds: state.data?.colorThresholds })"));
   assert.ok(providers.includes("const routes = rows.filter(row => providerCompany(row) === option.key)"));
   assert.ok(providers.includes("option.key === 'other'"));

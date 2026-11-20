@@ -1,10 +1,10 @@
 <div align="center">
 
-<img src="docs/icon.png" alt="DSH provider quota, spend and model management plugin icon" width="160">
+<img src="docs/icon.png" alt="DSH Quota+ plugin icon" width="160">
 
-# DSH Provider Quotas, Spend and Model Management
+# DSH Quota+
 
-**Provider quotas, OpenAI spend and company-grouped model management for DeepSeek Harness Desktop. No npm runtime dependencies or install scripts.**
+**For DeepSeek Harness Desktop: a multi-provider quota and usage dashboard with balances, subscription quotas and OpenAI organization spend, plus multi-provider model management that extends DSH’s official authorization, model selection and reasoning-effort settings. No npm runtime dependencies or install scripts.**
 
 [![Stars](https://img.shields.io/github/stars/WXYS1209/dsh-quota-cordis?style=flat&label=stars&color=f59e0b)](https://github.com/WXYS1209/dsh-quota-cordis/stargazers)
 [![npm](https://img.shields.io/npm/v/dsh-quota-cordis?label=npm&color=0891b2&logo=npm)](https://www.npmjs.com/package/dsh-quota-cordis)
@@ -16,7 +16,7 @@
 
 ## Install
 
-This documentation covers **0.7.4**. The declared DSH range remains `>=0.2.2-rc.1 <0.2.3-0`; the recommended and source-audited baseline is **0.2.2-rc.5**, not a re-test of every earlier RC.
+This documentation covers **0.7.5**. The declared DSH range remains `>=0.2.2-rc.1 <0.2.3-0`; the recommended and source-audited baseline is **0.2.2-rc.5**, not a re-test of every earlier RC.
 
 ```sh
 dsh plugin --profile desktop add dsh-quota-cordis
@@ -28,15 +28,15 @@ After updating plugin code, restart DSH and fully refresh the page. The form's *
 
 ## Features
 
-- **Provider quotas:** provider balances, subscription windows and OpenAI spend details.
-- **Model management:** company grouping/search, supported provider and model editing, model discovery and custom API routes; unsupported editors remain read-only.
-- **Color settings:** configurable remaining-quota thresholds.
+The settings page is titled **DSH Quota+**, with **Models**, **Quotas** and **Settings** tabs:
+
+- **Models:** multi-provider grouping/search; edit providers and models on top of DSH’s official model settings, discover models, manage custom API routes, and set authorization, model selection and reasoning effort; unsupported editors remain read-only.
+- **Quotas:** dashboard for multi-provider balances, subscription quotas and OpenAI organization spend.
+- **Settings:** configurable remaining-quota thresholds.
 - **Composer summary:** compact current-provider status with an upward popup.
 - **Agent tools:** `provider_quota`, `quota_color_settings` and `provider_company_rules`.
 
 ## Provider support
-
-**Accepted** means historical live-account acceptance, not a new full rc.5 verification. Current SDK/source and synthetic tests are separate evidence. See [verification history](<CHANGELOG.md#060--2026-11-10>).
 
 | Provider | Display | Status |
 |---|---|---|
@@ -52,12 +52,12 @@ After updating plugin code, restart DSH and fully refresh the page. The form's *
 | MiniMax China M Plan | Remaining quota | Accepted |
 | Other providers/relays | Status and reason | No quota adapter |
 
-Preview features still need live-account validation. Missing data is not shown as zero; Credits are usage units, not an API cash balance.
+Missing data is not shown as zero; Credits are usage units, not an API cash balance.
 
 ## Usage notes
 
 - **OpenAI spend needs a separate organization Admin key**, not an inference key. Enter it in OpenAI details; cost data may arrive late or be revised.
-- Companies follow the actual Host-resolved endpoint first. If no route endpoint exists, a version-matched built-in catalog with a single model hostname can supply a separately labelled grouping hint; it does not change the request endpoint. Saved user settings or configured authentication sort first, then localized names; unknown endpoints stay last. Merely enabling a default entry does not count. Edit expands inside its card; discovery uses a dialog and explicit selection. Final **Save** persists changes; editing does not switch the selected/default model.
+- Providers follow the actual Host-resolved endpoint first. If no route endpoint exists, a version-matched built-in catalog with a single model hostname can supply a separately labelled grouping hint; it does not change the request endpoint. Saved user settings or configured authentication sort first, then localized names; unknown endpoints stay last. Merely enabling a default entry does not count. Edit expands inside its card; discovery uses a dialog and explicit selection. Final **Save** persists changes; editing does not switch the selected/default model.
 - **Reasoning efforts** can be inherited, disabled, or configured per editable model where the Host schema supports them. Blank platform values use the selected level's name, except a supported blank `off` uses the protocol default. Choose the effort for a conversation in DSH's native model selector.
 - **Fetch available models** tries the platform first on supported listing routes (OpenAI-compatible, Anthropic and Gemini). The dialog labels live results and their credential scope. If live listing fails or is unsupported, it uses the existing DSH catalog when that fallback is safe, without retrying a failed custom endpoint. A successful empty list is not replaced. Fixed platform endpoints follow the DSH Host's outbound proxy settings; custom endpoints need direct public HTTPS access. OpenAI live listing uses an API key, not ChatGPT subscription authorization. Codex uses the DSH built-in catalog.
 - **Codex login is built into this plugin using DSH native authorization; no extra OAuth UI plugin is required.** Login starts only on an explicit click and is safely unavailable if the native capability is missing. Existing native-grant quota/Credits queries remain independent of signing in here. The new login integration has source/synthetic coverage, not a new live-account OAuth acceptance.
@@ -66,13 +66,13 @@ Preview features still need live-account validation. Missing data is not shown a
 
 Credentials stay on the local Host and never enter quota results. Quota queries are read-only, use fixed official HTTPS destinations and reject redirects. Native DeepSeek endpoint checks fail closed on invalid, uncertain or relay addresses; no official balance probe or stale official balance is substituted. The quota adapter does not read CLI credentials, cookies or refresh tokens, and does not refresh grants or run inference.
 
-See [security boundaries](<SECURITY.md>) and [company-rule coverage/maintenance](<docs/COMPANY_COVERAGE.md>) for endpoint precedence, private-state handling and rule updates.
+See [security boundaries](<SECURITY.md>) and [provider-rule coverage/maintenance](<docs/COMPANY_COVERAGE.md>) for endpoint precedence, private-state handling and rule updates.
 
 ## Development
 
 - `index.js` / `client.js` — Host and browser entry points.
 - `src/` — runtime modules; bundled data lives in `src/data/`.
-- `company-rules.json` — published company-rule data, also fetched online at runtime, so it stays at the repository root.
+- `company-rules.json` — published provider-rule data, also fetched online at runtime, so it stays at the repository root.
 - `locale/`, `icon.png`, `cordis.patch.yml` — package resources.
 - `test/`, `scripts/`, `docs/` — tests, maintenance scripts and documentation.
 

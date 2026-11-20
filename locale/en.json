@@ -1,6 +1,6 @@
 {
   "meta": {
-    "title": "Provider quotas",
-    "description": "View provider quotas and OpenAI spend, and manage providers and models by company."
+    "title": "DSH Quota+",
+    "description": "Multi-provider quota and usage dashboard with OpenAI organization spend; model management extends DSH's official authorization, model selection and reasoning effort."
   }
 }

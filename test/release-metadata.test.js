@@ -14,7 +14,7 @@ const emptyServices = {
 };
 
 test('release identity, compatibility boundary and shipped metadata module are consistent', () => {
-  assert.equal(manifest.version, '0.7.4');
+  assert.equal(manifest.version, '0.7.5');
   assert.equal(PLUGIN_VERSION, manifest.version);
   assert.equal(manifest.engines.dsh, '>=0.2.2-rc.1 <0.2.3-0');
   assert.ok(manifest.files.includes('index.js'));
@@ -110,10 +110,13 @@ test('Host construction wires runtime metadata explicitly rather than changing s
 
 test('current and previous release entries are unique, with no new Requirements section', async () => {
   const changelog = await readFile(new URL('../CHANGELOG.md', import.meta.url), 'utf8');
+  assert.equal((changelog.match(/^## 0\.7\.5\b/gm) ?? []).length, 1);
+  assert.match(changelog, /^## 0\.7\.5 — 2026-11-20$/m);
   assert.equal((changelog.match(/^## 0\.7\.4\b/gm) ?? []).length, 1);
   assert.match(changelog, /^## 0\.7\.4 — 2026-11-19$/m);
   assert.equal((changelog.match(/^## 0\.7\.3\b/gm) ?? []).length, 1);
   assert.match(changelog, /^## 0\.7\.3 — 2026-11-19$/m);
+  assert.ok(changelog.indexOf('## 0.7.5') < changelog.indexOf('## 0.7.4'));
   assert.ok(changelog.indexOf('## 0.7.4') < changelog.indexOf('## 0.7.3'));
   const drafts = [...changelog.matchAll(/^## Unreleased\s*$(?:\r?\n)([\s\S]*?)(?=^## |(?![\s\S]))/gm)];
   assert.ok(drafts.length <= 1, 'keep at most one unreleased section');

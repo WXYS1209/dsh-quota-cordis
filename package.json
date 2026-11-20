@@ -1,7 +1,7 @@
 {
   "name": "dsh-quota-cordis",
-  "version": "0.7.4",
-  "description": "Provider quotas, OpenAI spend and company-grouped model management for DeepSeek Harness",
+  "version": "0.7.5",
+  "description": "DSH Quota+ — multi-provider quota and usage dashboard for DeepSeek, GLM / Z.AI, MiniMax, OpenCode and Codex, OpenAI organization spend, and model management that extends DSH's official authorization, model selection and reasoning effort",
   "license": "MIT",
   "repository": { "type": "git", "url": "git+https://github.com/WXYS1209/dsh-quota-cordis.git" },
   "homepage": "https://github.com/WXYS1209/dsh-quota-cordis#readme",

@@ -178,7 +178,7 @@ export function apply(ctx, config = {}) {
   }));
   ctx.effect(() => ctx.tools.register({
     name: 'provider_company_rules',
-    description: 'Read company-domain grouping rules and update status, or refresh from the single bundled public rule-source URL. Read may check for updates in the background; refresh shares a 60-second cooldown. No provider domains, credentials, or configurable URLs are sent.',
+    description: 'Read provider grouping rules and update status, or refresh from the single bundled public rule-source URL. Read may check for updates in the background; refresh shares a 60-second cooldown. No provider domains, credentials, or configurable URLs are sent.',
     deferLoading: true,
     parameters: { type: 'object', properties: { action: { type: 'string', enum: ['read', 'refresh'], description: 'Default read. Refresh checks the fixed public source and retains last-known-good rules on failure.' } }, additionalProperties: false },
     output: { schema: { type: 'object', additionalProperties: true }, render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }] },

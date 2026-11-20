@@ -2,6 +2,11 @@
 
 All notable changes are documented here. Release dates from 0.7.3 use Asia/Shanghai (UTC+08:00); earlier entries retain their recorded UTC dates.
 
+## 0.7.5 — 2026-11-20
+
+- Rename the plugin to **DSH Quota+**; the descriptor now lives in the plugin description, page subtitle and README rather than the title. Rework that description to foreground the quota/usage dashboard, multi-provider model management, and the enhancements on top of DSH’s official model settings (authorization, model selection, reasoning effort). Unify the terminology on 模型提供商 / 提供商 (model provider / provider) across the UI, README, security notes and provider-rule documentation.
+- The settings page is titled **DSH Quota+**, with tabs in the order **模型 / Models**, **额度 / Quotas**, **设置 / Settings**; the page opens on Models. The plugin title is brand-only and the descriptor lives in the description and page subtitle.
+
 ## 0.7.4 — 2026-11-19
 
 - Keep one **Fetch available models** action: query supported platform endpoints first, report result source and credential scope, then fall back to DSH's built-in catalog when safe. Do not replace a successful empty result, retry a failed custom endpoint through DSH, or fall back after cancellation.

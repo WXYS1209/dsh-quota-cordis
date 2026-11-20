@@ -1,6 +1,6 @@
 {
   "meta": {
-    "title": "机构额度",
-    "description": "查看供应商额度与 OpenAI 支出，按公司管理供应商和模型。"
+    "title": "DSH Quota+",
+    "description": "额度与用量面板：多提供商余额、订阅额度与 OpenAI 组织支出；模型管理支持多供应商，并增强 DSH 官方模型管理的授权、可选模型与推理强度。"
   }
 }
