@@ -1,9 +1,9 @@
 [
-  "assets/screenshots/quotas.png",
-  "assets/screenshots/quotas-detail.png",
-  "assets/screenshots/models.png",
-  "assets/screenshots/models-detail.png",
-  "assets/screenshots/bottom-bar.png",
-  "assets/screenshots/composer-popup.png",
-  "assets/screenshots/settings.png"
+  "assets/screenshots/light/quotas.png",
+  "assets/screenshots/light/models.png",
+  "assets/screenshots/light/models-detail.png",
+  "assets/screenshots/light/bottom-bar.png",
+  "assets/screenshots/light/settings.png",
+  "assets/screenshots/dark/quotas-detail.png",
+  "assets/screenshots/dark/composer-popup.png"
 ]
